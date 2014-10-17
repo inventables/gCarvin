@@ -146,6 +146,7 @@
 #ifdef CPU_MAP_GR_GRAMPS // (Arduino Mega 2560) Working @EliteEng
 
   #define CARVIN
+	#define WAIT_FOR_BUTTON
   
   // Increase Buffers to make use of extra SRAM
   #define RX_BUFFER_SIZE		256
@@ -193,15 +194,11 @@
   #define SPINDLE_LED_PORT    PORTH
   #define SPINDLE_LED_BIT     5
 	
-	// I/O Pin for a hard reset
-	#define RESET_DDR     DDRE
-  #define RESET_PORT    PORTE
-  #define RESET_BIT     4
+	
   
   //#define BUTTON_LED_MASK     (1<<BUTTON_LED_BIT)
   
-  // CarveyThing
-
+  
   // NOTE: All limit bit pins must be on the same port
   #define LIMIT_DDR       DDRB
   #define LIMIT_PORT      PORTB

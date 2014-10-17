@@ -20,8 +20,7 @@ void carvin_init()
   
 	// -------------------------------------
 	
-	// make sure steppers are disabled at startup.
-	STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+	// make sure steppers are disabled at startup.	
 	STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
 	
 	
@@ -31,19 +30,15 @@ void carvin_init()
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
 	
-	RESET_PORT |= (1<<RESET_BIT);  // turn on the spindle LED
-	RESET_DDR |= (1<<RESET_BIT);
 	
-	#define RESET_DDR     DDRE
-  #define RESET_PORT    PORTE
-  #define RESET_BIT     4
 	
+	#ifdef WAIT_FOR_BUTTON
 	// -------------------- Be sure button is not in at startup ----------------------------
 	// the button may still be pushed from a prevoius power down
-	// wait until it comes up.
+	// wait until it comes up for a while
 	
 	long switch_open_count = 0;
-	
+
 	// wait for switch to open for given time
 	
 	while (switch_open_count < BUTTON_UP_WAIT_TIME)
@@ -54,9 +49,9 @@ void carvin_init()
 			switch_open_count = 0; // reset from debounce
 	}
 	
-  // --------------------- Wait for turn on ---------------------------------
+  // --------------------- Wait for turn on button push ---------------------------------
 	
-	
+
   // Wait in this loop until front "on" button is pushed
   // TO DO... make sure the push to turn off does not continue part reset and right through this  
   while (bit_istrue(PINOUT_PIN,bit(PIN_CYCLE_START)))
@@ -64,7 +59,7 @@ void carvin_init()
 	// do nothing until the button is pushed
 	// TO DO should we filter this so noise cannot turn on thre unit
   }
-	
+	#endif
 	
   
 	// -------------- PWM ------------------------------
@@ -101,7 +96,7 @@ void carvin_init()
 	init_led(&door_led);
 	init_led(&spindle_led);
   
-  // fade on the button and door LED at startup	
+  // fade on the button and door LEDs at startup	
   set_led(&button_led, 255,3);
 	set_led(&door_led, 255,3);
 	
@@ -153,7 +148,7 @@ void init_led(struct led_analog * led)
   (* led).target = 0;
 }
 
-// setup an LED with a new brightness level ... done via ISR
+// setup an LED with a new brightness level ... change is done via ISR
 void set_led(struct led_analog * led, uint8_t target_level, uint8_t duration)
 {
 	(* led).duration = duration;
@@ -162,7 +157,7 @@ void set_led(struct led_analog * led, uint8_t target_level, uint8_t duration)
 	
 }
 
-// setup an LED for throb ... done via ISR
+// setup an LED for throb ... throbing is done via ISR
 void throb_led(struct led_analog * led, uint8_t min_throb, uint8_t duration)
 {
 	(* led).duration = duration;	
@@ -187,7 +182,7 @@ int led_level_change(struct led_analog * led)
 	}
 	
 	
-	// the duration counter causes the function to be called more than once before it makes a change
+	// the duration counter causes the function to be called more than once before it makes a change by counting down to 1
 	if ((* led).dur_counter > 1)
 	{
 	  (* led).dur_counter--;  // count down to 1
@@ -217,14 +212,14 @@ int led_level_change(struct led_analog * led)
 	
 }
 
-// this is a software rest using the fastest watch dog setting.  It is used by the stop button
+// This is a software reset using the watchdog timer
 void reset_cpu()
 {
-  
-	RESET_PORT &= ~(1<<RESET_BIT); // Set pin to low.
+  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); // turn off the stepper drivers
+	
+  wdt_enable(WDTO_15MS);
   while(1)
   {
-	  // don't stroke the dog
 		// wait for it...boom
   }
 }
