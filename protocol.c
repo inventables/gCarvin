@@ -33,7 +33,9 @@
 #include "stepper.h"
 #include "motion_control.h"
 #include "report.h"
+#ifdef CARVIN
 	#include "carvin.h"
+#endif
 
 
 

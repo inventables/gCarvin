@@ -44,6 +44,8 @@
 // Default cpu mappings. Grbl officially supports the Arduino Uno only. Other processor types
 // may exist from user-supplied templates or directly user-defined in cpu_map.h
 #define CPU_MAP_GR_GRAMPS // Arduino Uno CPU
+//#define CPU_MAP_GRAMPS
+
 
 // Define runtime command special characters. These characters are 'picked-off' directly from the
 // serial read data stream and are not passed to the grbl line execution parser. Select characters
@@ -54,6 +56,7 @@
 #define CMD_STATUS_REPORT '?'
 #define CMD_FEED_HOLD '!'
 #define CMD_CYCLE_START '~'
+#define CMD_CPU_RESET 0x17 // Carvey CPU Reset for Firmware upload  
 #define CMD_RESET 0x18 // ctrl-x.
 
 // If homing is enabled, homing init lock sets Grbl into an alarm state upon power up. This forces
@@ -77,8 +80,9 @@
 // will not be affected by pin sharing.
 // NOTE: Defaults are set for a traditional 3-axis CNC machine. Z-axis first to clear, followed by X & Y.
 #define HOMING_CYCLE_0 (1<<Z_AXIS)                // REQUIRED: First move Z to clear workspace.
-#define HOMING_CYCLE_1 ((1<<X_AXIS)|(1<<Y_AXIS))  // OPTIONAL: Then move X,Y at the same time.
-// #define HOMING_CYCLE_2                         // OPTIONAL: Uncomment and add axes mask to enable
+//#define HOMING_CYCLE_1 ((1<<X_AXIS)|(1<<Y_AXIS))  // OPTIONAL: Then move X,Y at the same time.
+#define HOMING_CYCLE_1  (1<<Y_AXIS)                  // OPTIONAL: Uncomment and add axes mask to enable
+#define HOMING_CYCLE_1  (1<<X_AXIS)                  // OPTIONAL: Uncomment and add axes mask to enable
 
 // Number of homing cycles performed after when the machine initially jogs to limit switches.
 // This help in preventing overshoot and should improve repeatability. This value should be one or 

@@ -24,7 +24,9 @@
 #include "motion_control.h"
 #include "report.h"
 #include "print.h"
-#include "carvin.h"
+#ifdef CARVIN
+	#include "carvin.h"
+#endif
 #include "config.h"
 
 

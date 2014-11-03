@@ -38,8 +38,9 @@
 #include "limits.h"
 #include "probe.h"
 #include "report.h"
-#include "carvin.h"
-
+#ifdef CARVIN
+	#include "carvin.h"
+#endif
 
 // Declare system global variable structure
 system_t sys; 

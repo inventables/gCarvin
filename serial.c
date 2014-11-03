@@ -29,7 +29,9 @@
 #include "serial.h"
 #include "motion_control.h"
 #include "protocol.h"
-#include "carvin.h"
+#ifdef CARVIN
+	#include "carvin.h"
+#endif
 
 
 uint8_t serial_rx_buffer[RX_BUFFER_SIZE];
@@ -177,6 +179,7 @@ ISR(SERIAL_RX)
     case CMD_STATUS_REPORT: bit_true_atomic(sys.execute, EXEC_STATUS_REPORT); break; // Set as true
     case CMD_CYCLE_START:   bit_true_atomic(sys.execute, EXEC_CYCLE_START); break; // Set as true
     case CMD_FEED_HOLD:     bit_true_atomic(sys.execute, EXEC_FEED_HOLD); throb_led(&button_led, 30,3); break; // Set as true
+		case CMD_CPU_RESET:     reset_cpu(); break;  // reset the cpu for firmware upload.
     case CMD_RESET:         mc_reset(); break; // Call motion control reset routine.
     default: // Write character to buffer    
       next_head = serial_rx_buffer_head + 1;

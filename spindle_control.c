@@ -28,7 +28,9 @@
 #include "spindle_control.h"
 #include "protocol.h"
 #include "gcode.h"
-#include "carvin.h"
+#ifdef CARVIN
+	#include "carvin.h"
+#endif
 
 
 void spindle_init()

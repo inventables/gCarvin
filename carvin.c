@@ -228,7 +228,8 @@ void reset_cpu()
 // It is called by the "?" command in garble.
 void print_sw_states()
 {
-printPgmString(PSTR(",SW XYZPD:")); 
+    printPgmString(PSTR(",SW XYZPD:")); 
+		
 		if (bit_istrue(LIMIT_PIN,bit(X_LIMIT_BIT)))
 			printPgmString(PSTR("0"));
 		else

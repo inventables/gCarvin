@@ -27,19 +27,19 @@
 #define CARVIN_TIMER3_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
 struct led_analog{
-  uint8_t target;        // what is the desired brightness
-  uint8_t current_level; // how bright is is now
-  uint8_t duration;      // time in 1/2 seconds to get there (3 = 1.5 seconds)...0 = on right away
-  uint8_t dur_counter;   // where are we in the duration delay
-  uint8_t throb;         // 1 = light will throb
-  uint8_t throb_min;     // what is the minimum brightness of the throb.  It can look harsh if it goes off or nearly off
+  unsigned char target;        // what is the desired brightness
+  unsigned char current_level; // how bright is is now
+  unsigned char duration;      // time in 1/2 seconds to get there (3 = 1.5 seconds)...0 = on right away
+  unsigned char dur_counter;   // where are we in the duration delay
+  unsigned char throb;         // 1 = light will throb
+  unsigned char throb_min;     // what is the minimum brightness of the throb.  It can look harsh if it goes off or nearly off
 };
 
 void carvin_init();
 
 // functions to work with the LEDs
 void init_led(struct led_analog * led);
-void set_led(struct led_analog * led, uint8_t target_level, uint8_t duration);
+void set_led(struct led_analog * led, unsigned char target_level, unsigned char duration);
 int led_level_change(struct led_analog * led);  // checks to see if a level change is needed
 
 void print_sw_states(); // print the switch state like "SW XYZPD"  X,Y,Z, Probe, Door  
