@@ -18,13 +18,14 @@
 
 // more human readable names for the output compare registers (PWM duty)
 #define BUTTON_LED_OCR OCR4A
-#define DOOR_LED_OCR OCR4B
+//#define DOOR_LED_OCR OCR4B  //error on schematic see next line
+#define DOOR_LED_OCR OCR3B  // temp fix
 #define SPINDLE_LED_OCR OCR4C 
 
 #define LED_FULL_ON 255
 #define LED_FULL_OFF 0
 
-#define CARVIN_TIMER3_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
+#define CARVIN_TIMING_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
 struct led_analog{
   unsigned char target;        // what is the desired brightness

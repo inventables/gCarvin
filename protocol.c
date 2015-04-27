@@ -1,8 +1,9 @@
 /*
   protocol.c - controls Grbl execution protocol and procedures
-  Part of Grbl v0.9
-
-  Copyright (c) 2012-2014 Sungeun K. Jeon  
+  Part of Grbl
+  
+  Copyright (c) 2011-2015 Sungeun K. Jeon  
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,38 +18,30 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/ 
 
-#include "system.h"
-#include "serial.h"
-#include "settings.h"
-#include "protocol.h"
-#include "gcode.h"
-#include "planner.h"
-#include "stepper.h"
-#include "motion_control.h"
-#include "report.h"
-#ifdef CARVIN
-	#include "carvin.h"
-#endif
+#include "grbl.h"
 
+// Define different comment types for pre-parsing.
+#define COMMENT_NONE 0
+#define COMMENT_TYPE_PARENTHESES 1
+#define COMMENT_TYPE_SEMICOLON 2
 
 
 static char line[LINE_BUFFER_SIZE]; // Line to be executed. Zero-terminated.
 
+static void protocol_exec_rt_suspend();
 
 // Directs and executes one line of formatted input from protocol_process. While mostly
 // incoming streaming g-code blocks, this also directs and executes Grbl internal commands,
 // such as settings, initiating the homing cycle, and toggling switch states.
 static void protocol_execute_line(char *line) 
 {      
-  protocol_execute_runtime(); // Runtime command check point.
+  protocol_execute_realtime(); // Runtime command check point.
   if (sys.abort) { return; } // Bail to calling function upon system abort  
+
+  #ifdef REPORT_ECHO_LINE_RECEIVED
+    report_echo_line_received(line);
+  #endif
 
   if (line[0] == 0) {
     // Empty or comment line. Send status message for syncing purposes.
@@ -85,8 +78,13 @@ void protocol_main_loop()
   if (sys.state == STATE_ALARM) {
     report_feedback_message(MESSAGE_ALARM_LOCK); 
   } else {
-    // All systems go!
-    sys.state = STATE_IDLE; // Set system to ready. Clear all state flags.
+    // All systems go! But first check for safety door.
+    if (system_check_safety_door_ajar()) {
+      bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);
+      protocol_execute_realtime(); // Enter safety door mode. Should return as IDLE state.
+    } else {
+      sys.state = STATE_IDLE; // Set system to ready. Clear all state flags.
+    } 
     system_execute_startup(line); // Execute startup script.
   }
     
@@ -94,7 +92,7 @@ void protocol_main_loop()
   // Primary loop! Upon a system abort, this exits back to main() to reset the system. 
   // ---------------------------------------------------------------------------------  
   
-  uint8_t iscomment = false;
+  uint8_t comment = COMMENT_NONE;
   uint8_t char_counter = 0;
   uint8_t c;
   for (;;) {
@@ -113,14 +111,14 @@ void protocol_main_loop()
       if ((c == '\n') || (c == '\r')) { // End of line reached
         line[char_counter] = 0; // Set string termination character.
         protocol_execute_line(line); // Line is complete. Execute it!
-        iscomment = false;
+        comment = COMMENT_NONE;
         char_counter = 0;
       } else {
-        if (iscomment) {
+        if (comment != COMMENT_NONE) {
           // Throw away all comment characters
           if (c == ')') {
-            // End of comment. Resume line.
-            iscomment = false;
+            // End of comment. Resume line. But, not if semicolon type comment.
+            if (comment == COMMENT_TYPE_PARENTHESES) { comment = COMMENT_NONE; }
           }
         } else {
           if (c <= ' ') { 
@@ -133,9 +131,10 @@ void protocol_main_loop()
             // NOTE: This doesn't follow the NIST definition exactly, but is good enough for now.
             // In the future, we could simply remove the items within the comments, but retain the
             // comment control characters, so that the g-code parser can error-check it.
-            iscomment = true;
-          // } else if (c == ';') {
-            // Comment character to EOL NOT SUPPORTED. LinuxCNC definition. Not NIST.
+            comment = COMMENT_TYPE_PARENTHESES;
+          } else if (c == ';') {
+            // NOTE: ';' comment to EOL is a LinuxCNC definition. Not NIST.
+            comment = COMMENT_TYPE_SEMICOLON;
             
           // TODO: Install '%' feature 
           // } else if (c == '%') {
@@ -148,7 +147,7 @@ void protocol_main_loop()
           } else if (char_counter >= (LINE_BUFFER_SIZE-1)) {
             // Detect line buffer overflow. Report error and reset line buffer.
             report_status_message(STATUS_OVERFLOW);
-            iscomment = false;
+            comment = COMMENT_NONE;
             char_counter = 0;
           } else if (c >= 'a' && c <= 'z') { // Upcase lowercase
             line[char_counter++] = c-'a'+'A';
@@ -164,7 +163,7 @@ void protocol_main_loop()
     // completed. In either case, auto-cycle start, if enabled, any queued moves.
     protocol_auto_cycle_start();
 
-    protocol_execute_runtime();  // Runtime command check point.
+    protocol_execute_realtime();  // Runtime command check point.
     if (sys.abort) { return; } // Bail to main() program loop to reset system.
               
   }
@@ -173,127 +172,16 @@ void protocol_main_loop()
 }
 
 
-// Executes run-time commands, when required. This is called from various check points in the main
-// program, primarily where there may be a while loop waiting for a buffer to clear space or any
-// point where the execution time from the last check point may be more than a fraction of a second.
-// This is a way to execute runtime commands asynchronously (aka multitasking) with grbl's g-code
-// parsing and planning functions. This function also serves as an interface for the interrupts to 
-// set the system runtime flags, where only the main program handles them, removing the need to
-// define more computationally-expensive volatile variables. This also provides a controlled way to 
-// execute certain tasks without having two or more instances of the same task, such as the planner
-// recalculating the buffer upon a feedhold or override.
-// NOTE: The sys.execute variable flags are set by any process, step or serial interrupts, pinouts,
-// limit switches, or the main program.
-void protocol_execute_runtime()
-{
-  uint8_t rt_exec = sys.execute; // Copy to avoid calling volatile multiple times
-  if (rt_exec) { // Enter only if any bit flag is true
-    
-    // System alarm. Everything has shutdown by something that has gone severely wrong. Report
-    // the source of the error to the user. If critical, Grbl disables by entering an infinite
-    // loop until system reset/abort.
-    if (rt_exec & (EXEC_ALARM | EXEC_CRIT_EVENT)) {      
-      sys.state = STATE_ALARM; // Set system alarm state
-
-      // Critical events. Hard/soft limit events identified by both critical event and alarm exec
-      // flags. Probe fail is identified by the critical event exec flag only.
-      if (rt_exec & EXEC_CRIT_EVENT) {
-        if (rt_exec & EXEC_ALARM) { report_alarm_message(ALARM_LIMIT_ERROR); }
-        else { report_alarm_message(ALARM_PROBE_FAIL); }
-        report_feedback_message(MESSAGE_CRITICAL_EVENT);
-        bit_false_atomic(sys.execute,EXEC_RESET); // Disable any existing reset
-        do { 
-          // Nothing. Block EVERYTHING until user issues reset or power cycles. Hard limits
-          // typically occur while unattended or not paying attention. Gives the user time
-          // to do what is needed before resetting, like killing the incoming stream. The 
-          // same could be said about soft limits. While the position is not lost, the incoming
-          // stream could be still engaged and cause a serious crash if it continues afterwards.
-        } while (bit_isfalse(sys.execute,EXEC_RESET));
-
-      // Standard alarm event. Only abort during motion qualifies.
-      } else {
-        // Runtime abort command issued during a cycle, feed hold, or homing cycle. Message the
-        // user that position may have been lost and set alarm state to enable the alarm lockout
-        // to indicate the possible severity of the problem.
-        report_alarm_message(ALARM_ABORT_CYCLE);
-      }
-      bit_false_atomic(sys.execute,(EXEC_ALARM | EXEC_CRIT_EVENT));
-    } 
-  
-    // Execute system abort. 
-    if (rt_exec & EXEC_RESET) {
-      sys.abort = true;  // Only place this is set true.
-      return; // Nothing else to do but exit.
-    }
-    
-    // Execute and serial print status
-    if (rt_exec & EXEC_STATUS_REPORT) { 
-      report_realtime_status();
-      bit_false_atomic(sys.execute,EXEC_STATUS_REPORT);
-    }
-    
-    // Execute a feed hold with deceleration, only during cycle.
-    if (rt_exec & EXEC_FEED_HOLD) {
-      // !!! During a cycle, the segment buffer has just been reloaded and full. So the math involved
-      // with the feed hold should be fine for most, if not all, operational scenarios.
-      if (sys.state == STATE_CYCLE) {
-        sys.state = STATE_HOLD;
-        st_update_plan_block_parameters();
-        st_prep_buffer();
-        sys.auto_start = false; // Disable planner auto start upon feed hold.				
-      }			
-      bit_false_atomic(sys.execute,EXEC_FEED_HOLD);
-    }
-        
-    // Execute a cycle start by starting the stepper interrupt begin executing the blocks in queue.
-    if (rt_exec & EXEC_CYCLE_START) { 
-      if (sys.state == STATE_QUEUED) {
-        sys.state = STATE_CYCLE;
-        st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
-        st_wake_up();
-        if (bit_istrue(settings.flags,BITFLAG_AUTO_START)) {
-          sys.auto_start = true; // Re-enable auto start after feed hold.
-        } else {
-          sys.auto_start = false; // Reset auto start per settings.
-        }
-      }    
-      bit_false_atomic(sys.execute,EXEC_CYCLE_START);
-    }
-    
-    // Reinitializes the cycle plan and stepper system after a feed hold for a resume. Called by 
-    // runtime command execution in the main program, ensuring that the planner re-plans safely.
-    // NOTE: Bresenham algorithm variables are still maintained through both the planner and stepper
-    // cycle reinitializations. The stepper path should continue exactly as if nothing has happened.   
-    // NOTE: EXEC_CYCLE_STOP is set by the stepper subsystem when a cycle or feed hold completes.
-    if (rt_exec & EXEC_CYCLE_STOP) {
-      if ( plan_get_current_block() ) { sys.state = STATE_QUEUED; }
-      else { sys.state = STATE_IDLE; }
-      bit_false_atomic(sys.execute,EXEC_CYCLE_STOP);
-    }
-
-  }
-  
-  // Overrides flag byte (sys.override) and execution should be installed here, since they 
-  // are runtime and require a direct and controlled interface to the main stepper program.
-
-  // Reload step segment buffer
-  if (sys.state & (STATE_CYCLE | STATE_HOLD | STATE_HOMING)) { st_prep_buffer(); }  
-  
-}  
-
-
 // Block until all buffered steps are executed or in a cycle state. Works with feed hold
 // during a synchronize call, if it should happen. Also, waits for clean cycle end.
 void protocol_buffer_synchronize()
 {
   // If system is queued, ensure cycle resumes if the auto start flag is present.
   protocol_auto_cycle_start();
-  // Check and set auto start to resume cycle after synchronize and caller completes.
-  if (sys.state == STATE_CYCLE) { sys.auto_start = true; }
-  while (plan_get_current_block() || (sys.state == STATE_CYCLE)) { 
-    protocol_execute_runtime();   // Check and execute run-time commands
+  do {
+    protocol_execute_realtime();   // Check and execute run-time commands
     if (sys.abort) { return; } // Check for system abort
-  }    
+  } while (plan_get_current_block() || (sys.state == STATE_CYCLE));
 }
 
 
@@ -304,7 +192,330 @@ void protocol_buffer_synchronize()
 // as a beginner tool, but (1.) still operates. If disabled, the operation of cycle start is
 // manually issuing a cycle start command whenever the user is ready and there is a valid motion 
 // command in the planner queue.
-// NOTE: This function is called from the main loop and mc_line() only and executes when one of
-// two conditions exist respectively: There are no more blocks sent (i.e. streaming is finished, 
-// single commands), or the planner buffer is full and ready to go.
-void protocol_auto_cycle_start() { if (sys.auto_start) { bit_true_atomic(sys.execute, EXEC_CYCLE_START); } } 
+// NOTE: This function is called from the main loop, buffer sync, and mc_line() only and executes 
+// when one of these conditions exist respectively: There are no more blocks sent (i.e. streaming 
+// is finished, single commands), a command that needs to wait for the motions in the buffer to 
+// execute calls a buffer sync, or the planner buffer is full and ready to go.
+void protocol_auto_cycle_start() { bit_true_atomic(sys.rt_exec_state, EXEC_CYCLE_START); } 
+
+
+// Executes run-time commands, when required. This is called from various check points in the main
+// program, primarily where there may be a while loop waiting for a buffer to clear space or any
+// point where the execution time from the last check point may be more than a fraction of a second.
+// This is a way to execute realtime commands asynchronously (aka multitasking) with grbl's g-code
+// parsing and planning functions. This function also serves as an interface for the interrupts to 
+// set the system realtime flags, where only the main program handles them, removing the need to
+// define more computationally-expensive volatile variables. This also provides a controlled way to 
+// execute certain tasks without having two or more instances of the same task, such as the planner
+// recalculating the buffer upon a feedhold or override.
+// NOTE: The sys.rt_exec_state variable flags are set by any process, step or serial interrupts, pinouts,
+// limit switches, or the main program.
+void protocol_execute_realtime()
+{
+  protocol_exec_rt_system();
+  if (sys.suspend) { protocol_exec_rt_suspend(); }
+}
+
+
+void protocol_exec_rt_system()
+{
+  uint8_t rt_exec; // Temp variable to avoid calling volatile multiple times.
+  rt_exec = sys.rt_exec_alarm; // Copy volatile sys.rt_exec_alarm.
+  if (rt_exec) { // Enter only if any bit flag is true
+    // System alarm. Everything has shutdown by something that has gone severely wrong. Report
+    // the source of the error to the user. If critical, Grbl disables by entering an infinite
+    // loop until system reset/abort.
+    sys.state = STATE_ALARM; // Set system alarm state
+    if (rt_exec & EXEC_ALARM_HARD_LIMIT) {
+      report_alarm_message(ALARM_HARD_LIMIT_ERROR); 
+    } else if (rt_exec & EXEC_ALARM_SOFT_LIMIT) {
+      report_alarm_message(ALARM_SOFT_LIMIT_ERROR);
+    } else if (rt_exec & EXEC_ALARM_ABORT_CYCLE) {      
+      report_alarm_message(ALARM_ABORT_CYCLE);
+    } else if (rt_exec & EXEC_ALARM_PROBE_FAIL) {
+      report_alarm_message(ALARM_PROBE_FAIL);
+    } else if (rt_exec & EXEC_ALARM_HOMING_FAIL) {
+      report_alarm_message(ALARM_HOMING_FAIL);
+    }
+    // Halt everything upon a critical event flag. Currently hard and soft limits flag this.
+    if (rt_exec & EXEC_CRITICAL_EVENT) {
+      report_feedback_message(MESSAGE_CRITICAL_EVENT);
+      bit_false_atomic(sys.rt_exec_state,EXEC_RESET); // Disable any existing reset
+      do {       
+        // Block everything, except reset and status reports, until user issues reset or power 
+        // cycles. Hard limits typically occur while unattended or not paying attention. Gives 
+        // the user and a GUI time to do what is needed before resetting, like killing the
+        // incoming stream. The same could be said about soft limits. While the position is not 
+        // lost, streaming could cause a serious crash if it continues afterwards.
+        
+// TODO: Allow status reports during a critical alarm. Still need to think about implications of this.
+//         if (sys.rt_exec_state & EXEC_STATUS_REPORT) { 
+//           report_realtime_status();
+//           bit_false_atomic(sys.rt_exec_state,EXEC_STATUS_REPORT); 
+//         }
+
+      } while (bit_isfalse(sys.rt_exec_state,EXEC_RESET));
+    }
+    bit_false_atomic(sys.rt_exec_alarm,0xFF); // Clear all alarm flags
+  }
+  
+  rt_exec = sys.rt_exec_state; // Copy volatile sys.rt_exec_state.
+  if (rt_exec) {
+  
+	// Execute system abort. 
+	if (rt_exec & EXEC_RESET) {
+	  sys.abort = true;  // Only place this is set true.
+	  return; // Nothing else to do but exit.
+	}
+
+	// Execute and serial print status
+	if (rt_exec & EXEC_STATUS_REPORT) { 
+	  report_realtime_status();
+	  bit_false_atomic(sys.rt_exec_state,EXEC_STATUS_REPORT);
+	}
+  
+    // NOTE: The math involved to calculate the hold should be low enough for most, if not all, 
+    // operational scenarios. Once hold is initiated, the system enters a suspend state to block
+    // all main program processes until either reset or resumed.
+    if (rt_exec & (EXEC_MOTION_CANCEL | EXEC_FEED_HOLD | EXEC_SAFETY_DOOR)) {
+    
+      // TODO: CHECK MODE? How to handle this? Likely nothing, since it only works when IDLE and then resets Grbl.
+              
+      // State check for allowable states for hold methods.
+      if ((sys.state == STATE_IDLE) || (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_MOTION_CANCEL | STATE_HOLD | STATE_SAFETY_DOOR))) {
+
+        // If in CYCLE state, all hold states immediately initiate a motion HOLD.
+        if (sys.state == STATE_CYCLE) {
+          st_update_plan_block_parameters(); // Notify stepper module to recompute for hold deceleration.
+          sys.suspend = SUSPEND_EXECUTE_HOLD; // Initiate suspend state with active flag.
+        }
+        // If IDLE, Grbl is not in motion. Simply indicate suspend state and hold is complete.
+        if (sys.state == STATE_IDLE) { sys.suspend = (SUSPEND_HOLD_COMPLETE | SUSPEND_NO_MOTION); }
+      
+        // Execute and flag a motion cancel with deceleration and return to idle. Used primarily by probing cycle
+        // to halt and cancel the remainder of the motion.
+        if (rt_exec & EXEC_MOTION_CANCEL) {
+          // MOTION_CANCEL only occurs during a CYCLE, but a HOLD and SAFETY_DOOR may been initiated beforehand
+          // to hold the CYCLE. If so, only flag that motion cancel is complete.
+          if (sys.state == STATE_CYCLE) { sys.state = STATE_MOTION_CANCEL; }
+          // NOTE: Ensures the motion cancel is handled correctly if it is active during a HOLD or DOOR state.
+          sys.suspend |= SUSPEND_MOTION_CANCEL;  // Indicate motion cancel when resuming.
+        }
+  
+        // Execute a feed hold with deceleration, only during cycle.
+        if (rt_exec & EXEC_FEED_HOLD) {
+          // Block SAFETY_DOOR state from prematurely changing back to HOLD, which should only
+          // occur if the safety door switch closes.
+          if (sys.state != STATE_SAFETY_DOOR) { sys.state = STATE_HOLD; }
+        }
+
+        // Execute a safety door stop with a feed hold, only during a cycle, and disable spindle/coolant.
+        // NOTE: Safety door differs from feed holds by stopping everything no matter state, disables powered
+        // devices (spindle/coolant), and blocks resuming until switch is re-engaged.
+        if (rt_exec & EXEC_SAFETY_DOOR) {
+          report_feedback_message(MESSAGE_SAFETY_DOOR_AJAR); 
+          // NOTE: This flag doesn't change when the door closes, unlike sys.state. Ensures any parking motions
+          // are executed if the door switch closes and the state returns to HOLD.
+          sys.suspend |= SUSPEND_SAFETY_DOOR_AJAR; 
+          sys.state = STATE_SAFETY_DOOR;
+        }
+       
+      }
+    
+      bit_false_atomic(sys.rt_exec_state,(EXEC_MOTION_CANCEL | EXEC_FEED_HOLD | EXEC_SAFETY_DOOR));      
+    }
+    
+    if (rt_exec & (EXEC_CYCLE_START | EXEC_CYCLE_STOP)) {
+      // Execute a cycle start by starting the stepper interrupt to begin executing the blocks in queue.
+      if (rt_exec & EXEC_CYCLE_START) {
+        // Block if called at same time as the hold commands: feed hold, motion cancel, and safety door.
+        // Ensures auto-cycle-start doesn't resume a hold without an explicit user-input.
+        if (!(rt_exec & (EXEC_FEED_HOLD | EXEC_MOTION_CANCEL | EXEC_SAFETY_DOOR))) { 
+          // Cycle start only when IDLE or when a hold is complete and ready to resume.
+          // NOTE: SAFETY_DOOR is implicitly blocked. It reverts to HOLD when the door is closed.
+          if ((sys.state == STATE_IDLE) || ((sys.state & (STATE_HOLD | STATE_MOTION_CANCEL)) && (sys.suspend & SUSPEND_HOLD_COMPLETE))) {
+//             if ((sys.suspend & (SUSPEND_SAFETY_DOOR_AJAR | SUSPEND_RETRACT_COMPLETE | SUSPEND_RESTORE_COMPLETE) 
+//                   == (SUSPEND_SAFETY_DOOR_AJAR | SUSPEND_RETRACT_COMPLETE)) {
+            if (sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) {
+              if (sys.suspend & SUSPEND_RETRACT_COMPLETE) {
+                if bit_isfalse(sys.suspend,SUSPEND_RESTORE_COMPLETE) {
+				  // Flag to re-energize powered components and restore original position, if disabled by SAFETY_DOOR.
+				  // NOTE: For a safety door to resume, the switch must be closed, as indicated by HOLD state, and
+				  // the retraction execution is complete, which implies the initial feed hold is not active. To 
+				  // restore normal operation, the restore procedures must be initiated by the following flag. Once,
+				  // they are complete, it will call CYCLE_START automatically to resume and exit the suspend.
+				  sys.suspend |= SUSPEND_EXECUTE_PARK;
+				} else {
+				  bit_false(sys.suspend,SUSPEND_SAFETY_DOOR_AJAR);
+				}
+			  }
+            } 
+            if (!(sys.suspend & SUSPEND_SAFETY_DOOR_AJAR)) {          
+              // Start cycle only if queued motions exist in planner buffer and the motion is not canceled.
+              if (plan_get_current_block() && bit_isfalse(sys.suspend,SUSPEND_MOTION_CANCEL)) {
+				sys.suspend = SUSPEND_DISABLE; // Break suspend state.
+                sys.state = STATE_CYCLE;
+                st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
+                st_wake_up();
+              } else { // Otherwise, do nothing. Set and resume IDLE state.
+				sys.suspend = SUSPEND_DISABLE; // Break suspend state.
+                sys.state = STATE_IDLE;
+              }
+            }
+          }
+        }    
+      }
+  
+      // Reinitializes the cycle plan and stepper system after a feed hold for a resume. Called by 
+      // realtime command execution in the main program, ensuring that the planner re-plans safely.
+      // NOTE: Bresenham algorithm variables are still maintained through both the planner and stepper
+      // cycle reinitializations. The stepper path should continue exactly as if nothing has happened.   
+      // NOTE: EXEC_CYCLE_STOP is set by the stepper subsystem when a cycle or feed hold completes.
+      if (rt_exec & EXEC_CYCLE_STOP) {
+        if (sys.state & (STATE_HOLD | STATE_SAFETY_DOOR)) {
+		  // Hold complete. Set to indicate ready to resume.  Remain in HOLD or DOOR states until user
+		  // has issued a resume command or reset.
+		  if (sys.suspend & SUSPEND_EXECUTE_HOLD) { sys.suspend |= SUSPEND_HOLD_COMPLETE; } 
+		  bit_false(sys.suspend,(SUSPEND_EXECUTE_HOLD | SUSPEND_EXECUTE_PARK));
+
+        } else { // Motion is complete. Includes CYCLE, HOMING, and MOTION_CANCEL states.
+          sys.suspend = SUSPEND_DISABLE;
+          sys.state = STATE_IDLE;
+        }
+      }
+  
+      bit_false_atomic(sys.rt_exec_state,(EXEC_CYCLE_START | EXEC_CYCLE_STOP));
+    }
+  }
+  
+  // Overrides flag byte (sys.override) and execution should be installed here, since they 
+  // are realtime and require a direct and controlled interface to the main stepper program.
+
+  // Reload step segment buffer
+  if (sys.state & (STATE_CYCLE | STATE_HOLD | STATE_MOTION_CANCEL | STATE_SAFETY_DOOR | STATE_HOMING)) { 
+    // Block step prep buffer, while in a suspend state and there is no suspend motion to execute.
+    if (bit_istrue(sys.suspend,SUSPEND_NO_MOTION)) { return; }
+    st_prep_buffer(); 
+  }
+
+}
+
+
+
+// #if (PARKING_PULLOUT_INCREMENT < 0)
+//   #error "Parking retract target must be greater than zero."
+// //   #error "Secondary parking retract target must be less than target limit."
+// #endif
+
+
+
+
+static void protocol_exec_rt_suspend()
+{
+  #ifdef PARKING_ENABLE
+    float return_target[N_AXIS];
+    float parking_target[N_AXIS];
+  #endif
+
+  while (sys.suspend) {
+  
+    if (sys.abort) { return; }
+    
+    // Safety door manager. Handles de/re-energizing, switch state checks, and parking motions.
+    if ((sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) && (sys.suspend & SUSPEND_HOLD_COMPLETE)) { 
+  
+      if (bit_isfalse(sys.suspend,SUSPEND_RETRACT_COMPLETE)) { 
+
+        #ifdef PARKING_ENABLE
+          // Execute slow pull-out parking retract motion. Parking requires homing enabled.
+          // NOTE: State is will remain DOOR, until the de-energizing and retract is complete.
+          if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
+
+            system_convert_array_steps_to_mpos(return_target,sys.position);
+            memcpy(parking_target,return_target,sizeof(return_target));
+      
+            // Check if motion moves away from the workpiece and 
+            if (parking_target[PARKING_AXIS] < PARKING_TARGET) {        
+              parking_target[PARKING_AXIS] += PARKING_PULLOUT_INCREMENT;
+              if (parking_target[PARKING_AXIS] > PARKING_TARGET) { 
+                parking_target[PARKING_AXIS] = PARKING_TARGET; 
+              }
+              mc_parking_motion(parking_target, PARKING_PULLOUT_RATE);
+            } 
+          }
+        #endif
+		
+		// De-energize spindle and coolant. 
+        spindle_stop();
+        coolant_stop();
+   
+        #ifdef PARKING_ENABLE
+          // Execute fast parking retract motion to parking target location.
+          if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
+            if (parking_target[PARKING_AXIS] < PARKING_TARGET) {
+              parking_target[PARKING_AXIS] = PARKING_TARGET;
+          
+              mc_parking_motion(parking_target, PARKING_RATE);
+            }    
+          }
+        #endif
+        
+        sys.suspend |= SUSPEND_RETRACT_COMPLETE;
+
+      } else {    
+
+		// If safety door was opened, actively check when safety door is closed and ready to resume.
+		// NOTE: This unlocks the SAFETY_DOOR state to a HOLD state, such that CYCLE_START can activate a resume.
+		if (sys.state == STATE_SAFETY_DOOR) {
+		  if (!(system_check_safety_door_ajar())) {
+			sys.state = STATE_HOLD; // Update to HOLD state to indicate door is closed and ready to resume.
+		  }
+		}
+	
+		if (sys.suspend & SUSPEND_EXECUTE_PARK) {
+		
+		  #ifdef PARKING_ENABLE
+            // Execute fast restore motion to the pull-out position. Parking requires homing enabled.
+            // NOTE: State is will remain DOOR, until the de-energizing and retract is complete.
+            if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
+              // Check to ensure the motion doesn't move below pull-out position.            
+              float target_candidate = return_target[PARKING_AXIS] + PARKING_PULLOUT_INCREMENT;
+              if (target_candidate < parking_target[PARKING_AXIS]) {
+                parking_target[PARKING_AXIS] = target_candidate;
+                mc_parking_motion(parking_target, PARKING_RATE);
+              }           
+            }
+          #endif
+          
+		  // Delayed Tasks: Restart spindle and coolant, delay to power-up, then resume cycle.
+		  if (gc_state.modal.spindle != SPINDLE_DISABLE) { 
+			spindle_set_state(gc_state.modal.spindle, gc_state.spindle_speed); 
+			delay_ms(SAFETY_DOOR_SPINDLE_DELAY); // TODO: Blocking function call. Need a non-blocking one eventually.
+		  }
+		  if (gc_state.modal.coolant != COOLANT_DISABLE) { 
+			coolant_set_state(gc_state.modal.coolant); 
+			delay_ms(SAFETY_DOOR_COOLANT_DELAY); // TODO: Blocking function call. Need a non-blocking one eventually.
+		  }
+		  
+		  #ifdef PARKING_ENABLE
+            // Execute slow plunge motion from pull-out position to resume position.
+            if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
+              // Regardless if the retract parking motion was a valid/safe motion or not, the 
+              // restore parking motion should logically be valid, either by returning to the 
+              // original position through valid machine space or by not moving at all.
+              mc_parking_motion(return_target, PARKING_PULLOUT_RATE);
+              // TODO: Check to see if this plan reinitialize needs to be called here.
+              plan_cycle_reinitialize(); // Recalculate planner buffer for resume.
+            }   
+          #endif
+
+		  sys.suspend |= SUSPEND_RESTORE_COMPLETE;
+		  bit_true_atomic(sys.rt_exec_state,EXEC_CYCLE_START); // Set to resume program.
+		}
+	  
+	  }
+    }
+
+    protocol_exec_rt_system();
+  }
+}

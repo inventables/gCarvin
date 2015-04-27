@@ -1,8 +1,9 @@
 /*
   motion_control.h - high level interface for issuing motion commands
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,15 +18,10 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/  
 
 #ifndef motion_control_h
 #define motion_control_h
+
 
 #define HOMING_CYCLE_LINE_NUMBER -1
 
@@ -40,14 +36,14 @@ void mc_line(float *target, float feed_rate, uint8_t invert_feed_rate);
 
 // Execute an arc in offset mode format. position == current xyz, target == target xyz, 
 // offset == offset from current xyz, axis_XXX defines circle plane in tool space, axis_linear is
-// the direction of helical travel, radius == circle radius, isclockwise boolean. Used
+// the direction of helical travel, radius == circle radius, is_clockwise_arc boolean. Used
 // for vector transformation direction.
 #ifdef USE_LINE_NUMBERS
 void mc_arc(float *position, float *target, float *offset, float radius, float feed_rate, 
-  uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, int32_t line_number);
+  uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, uint8_t is_clockwise_arc, int32_t line_number);
 #else
 void mc_arc(float *position, float *target, float *offset, float radius, float feed_rate,
-  uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear);
+  uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, uint8_t is_clockwise_arc);
 #endif
   
 // Dwell for a specific number of seconds
@@ -58,10 +54,15 @@ void mc_homing_cycle();
 
 // Perform tool length probe cycle. Requires probe switch.
 #ifdef USE_LINE_NUMBERS
-void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number);
+void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_probe_away,
+  uint8_t is_no_error, int32_t line_number);
 #else
-void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate);
+void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_probe_away,
+  uint8_t is_no_error);
 #endif
+
+// Executes a single parking motion during a safety door ajar state.
+void mc_parking_motion(float *parking_target, float feed_rate);
 
 // Performs system reset. If in motion state, kills all motion and sets system alarm.
 void mc_reset();

@@ -1,8 +1,10 @@
 /*
   motion_control.c - high level interface for issuing motion commands
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
+  Copyright (c) 2011 Simen Svale Skogsrud
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,26 +19,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-    Copyright (c) 2011 Jens Geisler
-*/  
 
-#include "system.h"
-#include "settings.h"
-#include "protocol.h"
-#include "gcode.h"
-#include "planner.h"
-#include "stepper.h"
-#include "motion_control.h"
-#include "spindle_control.h"
-#include "coolant_control.h"
-#include "limits.h"
-#include "probe.h"
-#include "report.h"
+#include "grbl.h"
 
 
 // Execute linear motion in absolute millimeter coordinates. Feed rate given in millimeters/second
@@ -76,26 +60,24 @@
   // If the buffer is full: good! That means we are well ahead of the robot. 
   // Remain in this loop until there is room in the buffer.
   do {
-    protocol_execute_runtime(); // Check for any run-time commands
+    protocol_execute_realtime(); // Check for any run-time commands
     if (sys.abort) { return; } // Bail, if system abort.
     if ( plan_check_full_buffer() ) { protocol_auto_cycle_start(); } // Auto-cycle start when buffer is full.
     else { break; }
   } while (1);
 
+  // Plan and queue motion into planner buffer
+//   uint8_t plan_status; // Not used in normal operation.
   #ifdef USE_LINE_NUMBERS
     plan_buffer_line(target, feed_rate, invert_feed_rate, line_number);
   #else
     plan_buffer_line(target, feed_rate, invert_feed_rate);
   #endif
-  
-  // If idle, indicate to the system there is now a planned block in the buffer ready to cycle 
-  // start. Otherwise ignore and continue on.
-  if (!sys.state) { sys.state = STATE_QUEUED; }
 }
 
 
 // Execute an arc in offset mode format. position == current xyz, target == target xyz, 
-// offset == offset from current xyz, axis_XXX defines circle plane in tool space, axis_linear is
+// offset == offset from current xyz, axis_X defines circle plane in tool space, axis_linear is
 // the direction of helical travel, radius == circle radius, isclockwise boolean. Used
 // for vector transformation direction.
 // The arc is approximated by generating a huge number of tiny, linear segments. The chordal tolerance
@@ -103,10 +85,10 @@
 // distance from segment to the circle when the end points both lie on the circle.
 #ifdef USE_LINE_NUMBERS
   void mc_arc(float *position, float *target, float *offset, float radius, float feed_rate, 
-    uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, int32_t line_number)
+    uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, uint8_t is_clockwise_arc, int32_t line_number)
 #else
   void mc_arc(float *position, float *target, float *offset, float radius, float feed_rate,
-    uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear)
+    uint8_t invert_feed_rate, uint8_t axis_0, uint8_t axis_1, uint8_t axis_linear, uint8_t is_clockwise_arc)
 #endif
 {
   float center_axis0 = position[axis_0] + offset[axis_0];
@@ -118,10 +100,10 @@
   
   // CCW angle between position and target from circle center. Only one atan2() trig computation required.
   float angular_travel = atan2(r_axis0*rt_axis1-r_axis1*rt_axis0, r_axis0*rt_axis0+r_axis1*rt_axis1);
-  if (gc_state.modal.motion == MOTION_MODE_CW_ARC) { // Correct atan2 output per direction
-    if (angular_travel >= 0) { angular_travel -= 2*M_PI; }
+  if (is_clockwise_arc) { // Correct atan2 output per direction
+    if (angular_travel >= -ARC_ANGULAR_TRAVEL_EPSILON) { angular_travel -= 2*M_PI; }
   } else {
-    if (angular_travel <= 0) { angular_travel += 2*M_PI; }
+    if (angular_travel <= ARC_ANGULAR_TRAVEL_EPSILON) { angular_travel += 2*M_PI; }
   }
 
   // NOTE: Segment end points are on the arc, which can lead to the arc diameter being smaller by up to
@@ -227,8 +209,8 @@ void mc_dwell(float seconds)
    protocol_buffer_synchronize();
    delay_ms(floor(1000*seconds-i*DWELL_TIME_STEP)); // Delay millisecond remainder.
    while (i-- > 0) {
-     // NOTE: Check and execute runtime commands during dwell every <= DWELL_TIME_STEP milliseconds.
-     protocol_execute_runtime();
+     // NOTE: Check and execute realtime commands during dwell every <= DWELL_TIME_STEP milliseconds.
+     protocol_execute_realtime();
      if (sys.abort) { return; }
      _delay_ms(DWELL_TIME_STEP); // Delay DWELL_TIME_STEP increment
    }
@@ -240,7 +222,19 @@ void mc_dwell(float seconds)
 // executing the homing cycle. This prevents incorrect buffered plans after homing.
 void mc_homing_cycle()
 {
-  sys.state = STATE_HOMING; // Set system state variable
+  // Check and abort homing cycle, if hard limits are already enabled. Helps prevent problems
+  // with machines with limits wired on both ends of travel to one limit pin.
+  // TODO: Move the pin-specific LIMIT_PIN call to limits.c as a function.
+  #ifdef LIMITS_TWO_SWITCHES_ON_AXES  
+    uint8_t limit_state = (LIMIT_PIN & LIMIT_MASK);
+    if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { limit_state ^= LIMIT_MASK; }
+    if (limit_state) { 
+      mc_reset(); // Issue system reset and ensure spindle and coolant are shutdown.
+      bit_true_atomic(sys.rt_exec_alarm, (EXEC_ALARM_HARD_LIMIT|EXEC_CRITICAL_EVENT));
+      return;
+    }
+  #endif
+   
   limits_disable(); // Disable hard limits pin change register for cycle duration
     
   // -------------------------------------------------------------------------------------
@@ -255,7 +249,7 @@ void mc_homing_cycle()
     limits_go_home(HOMING_CYCLE_2);  // Homing cycle 2
   #endif
     
-  protocol_execute_runtime(); // Check for reset and set system abort.
+  protocol_execute_realtime(); // Check for reset and set system abort.
   if (sys.abort) { return; } // Did not complete. Alarm state set by mc_alarm.
 
   // Homing cycle complete! Setup system for normal operation.
@@ -264,10 +258,6 @@ void mc_homing_cycle()
   // Gcode parser position was circumvented by the limits_go_home() routine, so sync position now.
   gc_sync_position();
   
-  // Set idle state after homing completes and before returning to main program.  
-  sys.state = STATE_IDLE;
-  st_go_idle(); // Set idle state after homing completes
-
   // If hard limits feature enabled, re-enable hard limits pin change register after homing cycle.
   limits_init();
 }
@@ -276,9 +266,11 @@ void mc_homing_cycle()
 // Perform tool length probe cycle. Requires probe switch.
 // NOTE: Upon probe failure, the program will be stopped and placed into ALARM state.
 #ifdef USE_LINE_NUMBERS
-  void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number)
+  void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_probe_away, 
+    uint8_t is_no_error, int32_t line_number)
 #else
-  void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate)
+  void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_probe_away,
+    uint8_t is_no_error)
 #endif
 { 
   // TODO: Need to update this cycle so it obeys a non-auto cycle start.
@@ -286,12 +278,16 @@ void mc_homing_cycle()
 
   // Finish all queued commands and empty planner buffer before starting probe cycle.
   protocol_buffer_synchronize();
-  uint8_t auto_start_state = sys.auto_start; // Store run state
+
+  // Initialize probing control variables
+  sys.probe_succeeded = false; // Re-initialize probe history before beginning cycle.  
+  probe_configure_invert_mask(is_probe_away);
   
   // After syncing, check if probe is already triggered. If so, halt and issue alarm.
-  if (probe_get_state()) { 
-    bit_true_atomic(sys.execute, EXEC_CRIT_EVENT);
-    protocol_execute_runtime();
+  // NOTE: This probe initialization error applies to all probing cycles.
+  if ( probe_get_state() ) { // Check probe pin state.
+    bit_true_atomic(sys.rt_exec_alarm, EXEC_ALARM_PROBE_FAIL);
+    protocol_execute_realtime();
   }
   if (sys.abort) { return; } // Return if system reset has been issued.
 
@@ -302,45 +298,37 @@ void mc_homing_cycle()
     mc_line(target, feed_rate, invert_feed_rate);
   #endif
   
-  // Activate the probing monitor in the stepper module.
+  // Activate the probing state monitor in the stepper module.
   sys.probe_state = PROBE_ACTIVE;
 
   // Perform probing cycle. Wait here until probe is triggered or motion completes.
-  bit_true_atomic(sys.execute, EXEC_CYCLE_START);
+  bit_true_atomic(sys.rt_exec_state, EXEC_CYCLE_START);
   do {
-    protocol_execute_runtime(); 
+    protocol_execute_realtime(); 
     if (sys.abort) { return; } // Check for system abort
-  } while ((sys.state != STATE_IDLE) && (sys.state != STATE_QUEUED));
-
-  // Probing motion complete. If the probe has not been triggered, error out.
-  if (sys.probe_state == PROBE_ACTIVE) { bit_true_atomic(sys.execute, EXEC_CRIT_EVENT); }
-  protocol_execute_runtime();   // Check and execute run-time commands
+  } while (sys.state != STATE_IDLE);
+  
+  // Probing cycle complete!
+  
+  // Set state variables and error out, if the probe failed and cycle with error is enabled.
+  if (sys.probe_state == PROBE_ACTIVE) {
+    if (is_no_error) { memcpy(sys.probe_position, sys.position, sizeof(float)*N_AXIS); }
+    else { bit_true_atomic(sys.rt_exec_alarm, EXEC_ALARM_PROBE_FAIL); }
+  } else { 
+    sys.probe_succeeded = true; // Indicate to system the probing cycle completed successfully.
+  }
+  sys.probe_state = PROBE_OFF; // Ensure probe state monitor is disabled.
+  protocol_execute_realtime();   // Check and execute run-time commands
   if (sys.abort) { return; } // Check for system abort
 
   // Reset the stepper and planner buffers to remove the remainder of the probe motion.
   st_reset(); // Reest step segment buffer.
   plan_reset(); // Reset planner buffer. Zero planner positions. Ensure probing motion is cleared.
   plan_sync_position(); // Sync planner position to current machine position.
-  
-  // Pull-off triggered probe to the trigger location since we had to decelerate a little beyond
-  // it to stop the machine in a controlled manner. 
-  uint8_t idx;
-  for(idx=0; idx<N_AXIS; idx++){
-    // NOTE: The target[] variable updated here will be sent back and synced with the g-code parser.
-    target[idx] = (float)sys.probe_position[idx]/settings.steps_per_mm[idx];
-  }
-  #ifdef USE_LINE_NUMBERS
-    mc_line(target, feed_rate, invert_feed_rate, line_number);
-  #else
-    mc_line(target, feed_rate, invert_feed_rate);
-  #endif
 
-  // Execute pull-off motion and wait until it completes.
-  bit_true_atomic(sys.execute, EXEC_CYCLE_START);
-  protocol_buffer_synchronize(); 
-  if (sys.abort) { return; } // Return if system reset has been issued.
-
-  sys.auto_start = auto_start_state; // Restore run state before returning
+  // TODO: Update the g-code parser code to not require this target calculation but uses a gc_sync_position() call.
+  // NOTE: The target[] variable updated here will be sent back and synced with the g-code parser.
+  system_convert_array_steps_to_mpos(target, sys.position);
 
   #ifdef MESSAGE_PROBE_COORDINATES
     // All done! Output the probe position as message.
@@ -349,27 +337,48 @@ void mc_homing_cycle()
 }
 
 
-// Method to ready the system to reset by setting the runtime reset command and killing any
+
+
+void mc_parking_motion(float *parking_target, float feed_rate) 
+{
+  uint8_t plan_status = plan_parking_line(parking_target, feed_rate, false);
+  if (plan_status) {
+	bit_true(sys.suspend, SUSPEND_EXECUTE_PARK); 
+	bit_false(sys.suspend,SUSPEND_NO_MOTION);
+	st_prep_buffer();
+	st_wake_up();		  
+	while (sys.suspend & SUSPEND_EXECUTE_PARK) {
+	  protocol_exec_rt_system();
+	  if (sys.abort) { return; }
+	}
+  } else {
+    bit_false(sys.suspend, SUSPEND_EXECUTE_PARK);
+  } 
+}
+
+
+// Method to ready the system to reset by setting the realtime reset command and killing any
 // active processes in the system. This also checks if a system reset is issued while Grbl
 // is in a motion state. If so, kills the steppers and sets the system alarm to flag position
 // lost, since there was an abrupt uncontrolled deceleration. Called at an interrupt level by
-// runtime abort command and hard limits. So, keep to a minimum.
+// realtime abort command and hard limits. So, keep to a minimum.
 void mc_reset()
 {
   // Only this function can set the system reset. Helps prevent multiple kill calls.
-  if (bit_isfalse(sys.execute, EXEC_RESET)) {
-    bit_true_atomic(sys.execute, EXEC_RESET);
+  if (bit_isfalse(sys.rt_exec_state, EXEC_RESET)) {
+    bit_true_atomic(sys.rt_exec_state, EXEC_RESET);
 
     // Kill spindle and coolant.   
     spindle_stop();
     coolant_stop();
 
-    // Kill steppers only if in any motion state, i.e. cycle, feed hold, homing, or jogging
+    // Kill steppers only if in any motion state, i.e. cycle, actively holding, or homing.
     // NOTE: If steppers are kept enabled via the step idle delay setting, this also keeps
     // the steppers enabled by avoiding the go_idle call altogether, unless the motion state is
     // violated, by which, all bets are off.
-    if (sys.state & (STATE_CYCLE | STATE_HOLD | STATE_HOMING)) {
-      bit_true_atomic(sys.execute, EXEC_ALARM); // Flag main program to execute alarm state.
+    if ((sys.state & (STATE_CYCLE | STATE_HOMING)) || (sys.suspend & (SUSPEND_EXECUTE_HOLD | SUSPEND_EXECUTE_PARK))) {
+      if (sys.state == STATE_HOMING) { bit_true_atomic(sys.rt_exec_alarm, EXEC_ALARM_HOMING_FAIL); }
+      else { bit_true_atomic(sys.rt_exec_alarm, EXEC_ALARM_ABORT_CYCLE); }
       st_go_idle(); // Force kill steppers. Position has likely been lost.
     }
   }

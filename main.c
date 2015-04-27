@@ -1,9 +1,10 @@
 /*
   main.c - An embedded CNC Controller with rs274/ngc (g-code) support
-  Part of Grbl v0.9
+  Part of Grbl
   
-  Copyright (c) 2012-2014 Sungeun K. Jeon
-
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
+  
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
@@ -17,30 +18,9 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/  
 
+#include "grbl.h"
 
-#include "system.h"
-#include "serial.h"
-#include "settings.h"
-#include "protocol.h"
-#include "gcode.h"
-#include "planner.h"
-#include "stepper.h"
-#include "spindle_control.h"
-#include "coolant_control.h"
-#include "motion_control.h"
-#include "limits.h"
-#include "probe.h"
-#include "report.h"
-#ifdef CARVIN
-	#include "carvin.h"
-#endif
 
 // Declare system global variable structure
 system_t sys; 
@@ -48,23 +28,16 @@ system_t sys;
 
 int main(void)
 {
-
-  //delay(2000); // lame initial way to prevent button off going into restart
-
-// Carvin...moved this to the top so we can setup ports we need
-  system_init();   // Configure pinout pins and pin-change interrupt
+  // Initialize system upon power-up.
 	
-  settings_init(); // Load grbl settings from EEPROM
-	
-  #ifdef CARVIN
+	system_init();   // Configure pinout pins and pin-change interrupt
+	settings_init(); // Load Grbl settings from EEPROM
+  
+	#ifdef CARVIN
 	carvin_init();  // setup carvin I/O and wait for initial button push
   #endif
-  
-  
-  // Initialize system upon power-up.
-  serial_init();   // Setup serial baud rate and interrupts
-  
-  
+	
+	serial_init();   // Setup serial baud rate and interrupts
   stepper_init();  // Configure stepper pins and interrupt timers
   
   
@@ -83,7 +56,10 @@ int main(void)
     if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) { sys.state = STATE_ALARM; }
   #endif
   
-  
+  // Force Grbl into an ALARM state upon a power-cycle or hard reset.
+  #ifdef FORCE_INITIALIZATION_ALARM
+    sys.state = STATE_ALARM;
+  #endif
   
   // Grbl initialization loop upon power-up or a system abort. For the latter, all processes
   // will return to this loop to be cleanly re-initialized.
@@ -100,11 +76,7 @@ int main(void)
     limits_init(); 
     probe_init();
     plan_reset(); // Clear block buffer and planner variables
-	
-	
     st_reset(); // Clear stepper subsystem variables.
-	
-	
 
     // Sync cleared gcode and planner positions to current system position.
     plan_sync_position();
@@ -112,9 +84,9 @@ int main(void)
 
     // Reset system variables.
     sys.abort = false;
-    sys.execute = 0;
-    if (bit_istrue(settings.flags,BITFLAG_AUTO_START)) { sys.auto_start = true; }
-    else { sys.auto_start = false; }
+    sys.rt_exec_state = 0;
+    sys.rt_exec_alarm = 0;
+    sys.suspend = false;
           
     // Start Grbl main loop. Processes program inputs and executes them.
     protocol_main_loop();

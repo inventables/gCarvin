@@ -1,8 +1,9 @@
 /*
   gcode.h - rs274/ngc parser.
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,12 +18,6 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/  
 
 #ifndef gcode_h
 #define gcode_h
@@ -35,21 +30,23 @@
 // and are similar/identical to other g-code interpreters by manufacturers (Haas,Fanuc,Mazak,etc).
 // NOTE: Modal group define values must be sequential and starting from zero.
 #define MODAL_GROUP_G0 0 // [G4,G10,G28,G28.1,G30,G30.1,G53,G92,G92.1] Non-modal
-#define MODAL_GROUP_G1 1 // [G0,G1,G2,G3,G38.2,G80] Motion
+#define MODAL_GROUP_G1 1 // [G0,G1,G2,G3,G38.2,G38.3,G38.4,G38.5,G80] Motion
 #define MODAL_GROUP_G2 2 // [G17,G18,G19] Plane selection
 #define MODAL_GROUP_G3 3 // [G90,G91] Distance mode
-#define MODAL_GROUP_G5 4 // [G93,G94] Feed rate mode
-#define MODAL_GROUP_G6 5 // [G20,G21] Units
-#define MODAL_GROUP_G8 6 // [G43,G43.1,G49] Tool length offset
-#define MODAL_GROUP_G12 7 // [G54,G55,G56,G57,G58,G59] Coordinate system selection
+#define MODAL_GROUP_G4 4 // [G91.1] Arc IJK distance mode
+#define MODAL_GROUP_G5 5 // [G93,G94] Feed rate mode
+#define MODAL_GROUP_G6 6 // [G20,G21] Units
+#define MODAL_GROUP_G7 7 // [G40] Cutter radius compensation mode. G41/42 NOT SUPPORTED.
+#define MODAL_GROUP_G8 8 // [G43.1,G49] Tool length offset
+#define MODAL_GROUP_G12 9 // [G54,G55,G56,G57,G58,G59] Coordinate system selection
 
-#define MODAL_GROUP_M4 8  // [M0,M1,M2,M30] Stopping
-#define MODAL_GROUP_M7 9  // [M3,M4,M5] Spindle turning
-#define MODAL_GROUP_M8 10 // [M7,M8,M9] Coolant control
+#define MODAL_GROUP_M4 10  // [M0,M1,M2,M30] Stopping
+#define MODAL_GROUP_M7 11 // [M3,M4,M5] Spindle turning
+#define MODAL_GROUP_M8 12 // [M7,M8,M9] Coolant control
 
-#define OTHER_INPUT_F 11
-#define OTHER_INPUT_S 12
-#define OTHER_INPUT_T 13
+#define OTHER_INPUT_F 12
+#define OTHER_INPUT_S 13
+#define OTHER_INPUT_T 14
 
 // Define command actions for within execution-type modal groups (motion, stopping, non-modal). Used
 // internally by the parser to know which command to execute.
@@ -71,8 +68,11 @@
 #define MOTION_MODE_LINEAR 1 // G1
 #define MOTION_MODE_CW_ARC 2  // G2
 #define MOTION_MODE_CCW_ARC 3  // G3
-#define MOTION_MODE_PROBE 4 // G38.2
-#define MOTION_MODE_NONE 5 // G80
+#define MOTION_MODE_PROBE_TOWARD 4 // G38.2 NOTE: G38.2, G38.3, G38.4, G38.5 must be sequential. See report_gcode_modes().
+#define MOTION_MODE_PROBE_TOWARD_NO_ERROR 5 // G38.3
+#define MOTION_MODE_PROBE_AWAY 6 // G38.4
+#define MOTION_MODE_PROBE_AWAY_NO_ERROR 7 // G38.5
+#define MOTION_MODE_NONE 8 // G80
 
 // Modal Group G2: Plane select
 #define PLANE_SELECT_XY 0 // G17 (Default: Must be zero)
@@ -82,6 +82,9 @@
 // Modal Group G3: Distance mode
 #define DISTANCE_MODE_ABSOLUTE 0 // G90 (Default: Must be zero)
 #define DISTANCE_MODE_INCREMENTAL 1 // G91
+
+// Modal Group G4: Arc IJK distance mode
+#define DISTANCE_ARC_MODE_INCREMENTAL 0 // G91.1 (Default: Must be zero)
 
 // Modal Group M4: Program flow
 #define PROGRAM_FLOW_RUNNING 0 // (Default: Must be zero)
@@ -95,6 +98,9 @@
 // Modal Group G6: Units mode
 #define UNITS_MODE_MM 0 // G21 (Default: Must be zero)
 #define UNITS_MODE_INCHES 1 // G20
+
+// Modal Group G7: Cutter radius compensation mode
+#define CUTTER_COMP_DISABLE 0 // G40 (Default: Must be zero)
 
 // Modal Group M7: Spindle control
 #define SPINDLE_DISABLE 0 // M5 (Default: Must be zero)
@@ -132,16 +138,18 @@
 
 // NOTE: When this struct is zeroed, the above defines set the defaults for the system.
 typedef struct {
-  uint8_t motion;        // {G0,G1,G2,G3,G38.2,G80}
-  uint8_t feed_rate;     // {G93,G94}
-  uint8_t units;         // {G20,G21}
-  uint8_t distance;      // {G90,G91}
-  uint8_t plane_select;  // {G17,G18,G19}
-  uint8_t tool_length;   // {G43.1,G49}
-  uint8_t coord_select;  // {G54,G55,G56,G57,G58,G59}
-  uint8_t program_flow;  // {M0,M1,M2,M30}
-  uint8_t coolant;       // {M7,M8,M9}
-  uint8_t spindle;       // {M3,M4,M5}
+  uint8_t motion;          // {G0,G1,G2,G3,G38.2,G80}
+  uint8_t feed_rate;       // {G93,G94}
+  uint8_t units;           // {G20,G21}
+  uint8_t distance;        // {G90,G91}
+  // uint8_t distance_arc; // {G91.1} NOTE: Don't track. Only one supported.
+  uint8_t plane_select;    // {G17,G18,G19}
+  // uint8_t cutter_comp;  // {G40} NOTE: Don't track. Only one supported.
+  uint8_t tool_length;     // {G43.1,G49}
+  uint8_t coord_select;    // {G54,G55,G56,G57,G58,G59}
+  uint8_t program_flow;    // {M0,M1,M2,M30}
+  uint8_t coolant;         // {M7,M8,M9}
+  uint8_t spindle;         // {M3,M4,M5}
 } gc_modal_t;  
 
 typedef struct {
@@ -164,6 +172,7 @@ typedef struct {
   float spindle_speed;          // RPM
   float feed_rate;              // Millimeters/min
   uint8_t tool;                 // Tracks tool number. NOT USED.
+  int32_t line_number;          // Last line number sent
 
   float position[N_AXIS];       // Where the interpreter considers the tool to be at this point in the code
 

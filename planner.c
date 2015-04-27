@@ -1,8 +1,10 @@
 /*
   planner.c - buffers movement commands and manages the acceleration profile plan
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud 
+  Copyright (c) 2011 Jens Geisler 
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,20 +19,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-    Copyright (c) 2011 Jens Geisler
-*/ 
 
-#include "system.h"
-#include "planner.h"
-#include "protocol.h"
-#include "stepper.h"
-#include "settings.h"
-
+#include "grbl.h"
 
 #define SOME_LARGE_VALUE 1.0E+38 // Used by rapids and acceleration maximization calculations. Just needs
                                  // to be larger than any feasible (mm/min)^2 or mm/sec^2 value.
@@ -229,6 +219,12 @@ void plan_discard_current_block()
 }
 
 
+plan_block_t *plan_get_parking_block()
+{
+  return(&block_buffer[block_buffer_head]);
+}
+
+
 plan_block_t *plan_get_current_block() 
 {
   if (block_buffer_head == block_buffer_tail) { return(NULL); } // Buffer empty  
@@ -263,9 +259,9 @@ uint8_t plan_check_full_buffer()
    invert_feed_rate is true, or as seek/rapids rate if the feed_rate value is negative (and
    invert_feed_rate always false). */
 #ifdef USE_LINE_NUMBERS   
-  void plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number) 
+  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number) 
 #else
-  void plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate) 
+  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate) 
 #endif
 {
   // Prepare and initialize new block
@@ -284,17 +280,36 @@ uint8_t plan_check_full_buffer()
   int32_t target_steps[N_AXIS];
   float unit_vec[N_AXIS], delta_mm;
   uint8_t idx;
+  #ifdef COREXY
+    target_steps[A_MOTOR] = lround(target[A_MOTOR]*settings.steps_per_mm[A_MOTOR]);
+    target_steps[B_MOTOR] = lround(target[B_MOTOR]*settings.steps_per_mm[B_MOTOR]);
+    block->steps[A_MOTOR] = labs((target_steps[X_AXIS]-pl.position[X_AXIS]) - (target_steps[Y_AXIS]-pl.position[Y_AXIS]));
+    block->steps[B_MOTOR] = labs((target_steps[X_AXIS]-pl.position[X_AXIS]) + (target_steps[Y_AXIS]-pl.position[Y_AXIS]));
+  #endif
+
   for (idx=0; idx<N_AXIS; idx++) {
-    // Calculate target position in absolute steps. This conversion should be consistent throughout.
-    target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
-  
-    // Number of steps for each axis and determine max step events
-    block->steps[idx] = labs(target_steps[idx]-pl.position[idx]);
-    block->step_event_count = max(block->step_event_count, block->steps[idx]);
-    
-    // Compute individual axes distance for move and prep unit vector calculations.
+    // Calculate target position in absolute steps, number of steps for each axis, and determine max step events.
+    // Also, compute individual axes distance for move and prep unit vector calculations.
     // NOTE: Computes true distance from converted step values.
-    delta_mm = (target_steps[idx] - pl.position[idx])/settings.steps_per_mm[idx];
+    #ifdef COREXY
+      if ( !(idx == A_MOTOR) && !(idx == B_MOTOR) ) {
+        target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
+        block->steps[idx] = labs(target_steps[idx]-pl.position[idx]);
+      }
+      block->step_event_count = max(block->step_event_count, block->steps[idx]);
+      if (idx == A_MOTOR) {
+        delta_mm = ((target_steps[X_AXIS]-pl.position[X_AXIS]) - (target_steps[Y_AXIS]-pl.position[Y_AXIS]))/settings.steps_per_mm[idx];
+      } else if (idx == B_MOTOR) {
+        delta_mm = ((target_steps[X_AXIS]-pl.position[X_AXIS]) + (target_steps[Y_AXIS]-pl.position[Y_AXIS]))/settings.steps_per_mm[idx];
+      } else {
+        delta_mm = (target_steps[idx] - pl.position[idx])/settings.steps_per_mm[idx];
+      }
+    #else
+      target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
+      block->steps[idx] = labs(target_steps[idx]-pl.position[idx]);
+      block->step_event_count = max(block->step_event_count, block->steps[idx]);
+      delta_mm = (target_steps[idx] - pl.position[idx])/settings.steps_per_mm[idx];
+    #endif
     unit_vec[idx] = delta_mm; // Store unit vector numerator. Denominator computed later.
         
     // Set direction bits. Bit enabled always means direction is negative.
@@ -305,13 +320,15 @@ uint8_t plan_check_full_buffer()
   }
   block->millimeters = sqrt(block->millimeters); // Complete millimeters calculation with sqrt()
   
+  block->steps_remaining = (float)block->step_event_count; 
+  
   // Bail if this is a zero-length block. Highly unlikely to occur.
-  if (block->step_event_count == 0) { return; } 
+  if (block->step_event_count == 0) { return(PLAN_EMPTY_BLOCK); } 
   
   // Adjust feed_rate value to mm/min depending on type of rate input (normal, inverse time, or rapids)
   // TODO: Need to distinguish a rapids vs feed move for overrides. Some flag of some sort.
   if (feed_rate < 0) { feed_rate = SOME_LARGE_VALUE; } // Scaled down to absolute max/rapids rate later
-  else if (invert_feed_rate) { feed_rate = block->millimeters/feed_rate; }
+  else if (invert_feed_rate) { feed_rate *= block->millimeters; }
   if (feed_rate < MINIMUM_FEED_RATE) { feed_rate = MINIMUM_FEED_RATE; } // Prevents step generation round-off condition.
 
   // Calculate the unit vector of the line move and the block maximum feed rate and acceleration scaled 
@@ -352,7 +369,7 @@ uint8_t plan_check_full_buffer()
        colinear with the circle center. The circular segment joining the two paths represents the 
        path of centripetal acceleration. Solve for max velocity based on max acceleration about the
        radius of the circle, defined indirectly by junction deviation. This may be also viewed as 
-       path width or max_jerk in the previous grbl version. This approach does not actually deviate 
+       path width or max_jerk in the previous Grbl version. This approach does not actually deviate 
        from path, but used as a robust way to compute cornering speeds, as it takes into account the
        nonlinearities of both the junction angle and junction velocity.
 
@@ -369,12 +386,19 @@ uint8_t plan_check_full_buffer()
        change the overall maximum entry speed conditions of all blocks.
     */
     // NOTE: Computed without any expensive trig, sin() or acos(), by trig half angle identity of cos(theta).
-    float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
+    if (junction_cos_theta > 0.99) {
+      //  For a 0 degree acute junction, just set minimum junction speed. 
+      block->max_junction_speed_sqr = MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED;
+    } else {
+      junction_cos_theta = max(junction_cos_theta,-0.99); // Check for numerical round-off to avoid divide by zero.
+      float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
 
-    // TODO: Technically, the acceleration used in calculation needs to be limited by the minimum of the
-    // two junctions. However, this shouldn't be a significant problem except in extreme circumstances.
-    block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
-                                 (block->acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
+      // TODO: Technically, the acceleration used in calculation needs to be limited by the minimum of the
+      // two junctions. However, this shouldn't be a significant problem except in extreme circumstances.
+      block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
+                                   (block->acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
+
+    }
   }
 
   // Store block nominal speed
@@ -397,15 +421,124 @@ uint8_t plan_check_full_buffer()
   
   // Finish up by recalculating the plan with the new block.
   planner_recalculate();
+  return(PLAN_OK);
 }
+
+
+
+
+
+
+/* NOTES: 
+  - Can't update the previous_unit_vec and previous nominal speed data since we are no
+    longer synced with the buffer tail and new commands coming in after the buffer head. This
+    data must be retained.
+  - Block buffer can't be incremented for obvious reasons.
+  - Planner position MUST be backed up or not altered/used in this process at all! When planning the
+    parking (and return) motion, the sys.position must be used in its place.
+  - Pl.position must be taken out of these calculations. Create a wrapper that accepts
+    a pointer to the position data that it should use. sys.position or pl.position.
+*/  
+
+#ifdef USE_LINE_NUMBERS   
+  uint8_t plan_parking_line(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number) 
+#else
+  uint8_t plan_parking_line(float *target, float feed_rate, uint8_t invert_feed_rate) 
+#endif
+{
+  // Prepare and initialize new block
+  plan_block_t *block = &block_buffer[block_buffer_head];
+  block->step_event_count = 0;
+  block->millimeters = 0;
+  block->direction_bits = 0;
+  block->acceleration = SOME_LARGE_VALUE; // Scaled down to maximum acceleration later
+  #ifdef USE_LINE_NUMBERS
+    block->line_number = line_number;
+  #endif
+
+  // Compute and store initial move distance data.
+  // TODO: After this for-loop, we don't touch the stepper algorithm data. Might be a good idea
+  // to try to keep these types of things completely separate from the planner for portability.
+  int32_t target_steps[N_AXIS];
+  float unit_vec[N_AXIS], delta_mm;
+  uint8_t idx;
+  for (idx=0; idx<N_AXIS; idx++) {
+    // Calculate target position in absolute steps, number of steps for each axis, and determine max step events.
+    // Also, compute individual axes distance for move and prep unit vector calculations.
+    // NOTE: Computes true distance from converted step values.
+    target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
+    block->steps[idx] = labs(target_steps[idx]-sys.position[idx]);
+    block->step_event_count = max(block->step_event_count, block->steps[idx]);
+    delta_mm = (target_steps[idx] - sys.position[idx])/settings.steps_per_mm[idx];
+    unit_vec[idx] = delta_mm; // Store unit vector numerator. Denominator computed later.
+        
+    // Set direction bits. Bit enabled always means direction is negative.
+    if (delta_mm < 0 ) { block->direction_bits |= get_direction_pin_mask(idx); }
+    
+    // Incrementally compute total move distance by Euclidean norm. First add square of each term.
+    block->millimeters += delta_mm*delta_mm;
+  }
+  block->millimeters = sqrt(block->millimeters); // Complete millimeters calculation with sqrt()
+  
+  
+  block->steps_remaining = block->step_event_count; 
+  
+  // Bail if this is a zero-length block. Highly unlikely to occur.
+  if (block->step_event_count == 0) { return(PLAN_EMPTY_BLOCK); } 
+  
+  // Adjust feed_rate value to mm/min depending on type of rate input (normal, inverse time, or rapids)
+  // TODO: Need to distinguish a rapids vs feed move for overrides. Some flag of some sort.
+  if (feed_rate < 0) { feed_rate = SOME_LARGE_VALUE; } // Scaled down to absolute max/rapids rate later
+  else if (invert_feed_rate) { feed_rate *= block->millimeters; }
+  if (feed_rate < MINIMUM_FEED_RATE) { feed_rate = MINIMUM_FEED_RATE; } // Prevents step generation round-off condition.
+
+  // Calculate the unit vector of the line move and the block maximum feed rate and acceleration scaled 
+  // down such that no individual axes maximum values are exceeded with respect to the line direction. 
+  // NOTE: This calculation assumes all axes are orthogonal (Cartesian) and works with ABC-axes,
+  // if they are also orthogonal/independent. Operates on the absolute value of the unit vector.
+  float inverse_unit_vec_value;
+  float inverse_millimeters = 1.0/block->millimeters;  // Inverse millimeters to remove multiple float divides	
+  for (idx=0; idx<N_AXIS; idx++) {
+    if (unit_vec[idx] != 0) {  // Avoid divide by zero.
+      unit_vec[idx] *= inverse_millimeters;  // Complete unit vector calculation
+      inverse_unit_vec_value = fabs(1.0/unit_vec[idx]); // Inverse to remove multiple float divides.
+
+      // Check and limit feed rate against max individual axis velocities and accelerations
+      feed_rate = min(feed_rate,settings.max_rate[idx]*inverse_unit_vec_value);
+      block->acceleration = min(block->acceleration,settings.acceleration[idx]*inverse_unit_vec_value);
+    }
+  }
+  
+  // Initialize block entry speed as zero. Assume it will be starting from rest. Planner will correct this later.
+  block->entry_speed_sqr = 0.0;
+  block->max_junction_speed_sqr = 0.0; // Starting from rest. Enforce start from zero velocity.
+  block->max_entry_speed_sqr = 0.0;
+
+  // Store block nominal speed
+  block->nominal_speed_sqr = feed_rate*feed_rate; // (mm/min). Always > 0
+  return(PLAN_OK);
+}
+
 
 
 // Reset the planner position vectors. Called by the system abort/initialization routine.
 void plan_sync_position()
 {
+  // TODO: For motor configurations not in the same coordinate frame as the machine position,
+  // this function needs to be updated to accomodate the difference. 
   uint8_t idx;
   for (idx=0; idx<N_AXIS; idx++) {
-    pl.position[idx] = sys.position[idx];
+    #ifdef COREXY
+     if (idx==A_MOTOR) { 
+        pl.position[idx] = (sys.position[A_MOTOR] + sys.position[B_MOTOR])/2;
+      } else if (idx==B_MOTOR) { 
+        pl.position[idx] = (sys.position[A_MOTOR] - sys.position[B_MOTOR])/2;
+      } else {
+        pl.position[idx] = sys.position[idx];
+      }
+    #else
+      pl.position[idx] = sys.position[idx];
+    #endif
   }
 }
 

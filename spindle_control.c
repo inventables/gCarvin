@@ -1,8 +1,9 @@
 /*
   spindle_control.c - spindle control methods
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2012-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,100 +18,140 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2012 Sungeun K. Jeon
-*/ 
 
-#include "system.h"
-#include "spindle_control.h"
-#include "protocol.h"
-#include "gcode.h"
-#ifdef CARVIN
-	#include "carvin.h"
-#endif
+#include "grbl.h"
 
 
 void spindle_init()
 {    
-  // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
+  // Configure variable spindle PWM and enable pin, if requried. On the Uno, PWM and enable are
+  // combined unless configured otherwise.
   #ifdef VARIABLE_SPINDLE
     SPINDLE_PWM_DDR |= (1<<SPINDLE_PWM_BIT); // Configure as PWM output pin.
-    #ifndef CPU_MAP_ATMEGA328P 
+    #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN)
       SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT); // Configure as output pin.
     #endif     
-  #else
+  // Configure no variable spindle and only enable pin.
+  #else  
     SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT); // Configure as output pin.
   #endif
-  SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); // Configure as output pin.
+  
+  #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
+    SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); // Configure as output pin.
+  #endif
   spindle_stop();
 }
 
 
 void spindle_stop()
 {
+
+	
+	
   // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
   #ifdef VARIABLE_SPINDLE
     TCCRA_REGISTER &= ~(1<<COMB_BIT); // Disable PWM. Output voltage is zero.
-    #ifndef CPU_MAP_ATMEGA328P 
-      SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low.
+    #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN)
+      #ifdef INVERT_SPINDLE_ENABLE_PIN
+		    SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+			#else
+				SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+			#endif
     #endif
   #else
-    SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low.
+    #ifdef INVERT_SPINDLE_ENABLE_PIN
+	    SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+	  #else
+	    SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+	  #endif
   #endif  
-  
+	
 	#ifdef CARVIN
 			set_led(&spindle_led, LED_FULL_OFF,3);
 			set_led(&door_led, LED_FULL_ON,3);
 	#endif
-  
+	
 }
 
 
-void spindle_run(uint8_t direction, float rpm) 
+void spindle_set_state(uint8_t state, float rpm)
 {
-  if (sys.state == STATE_CHECK_MODE) { return; }
-  
-  // Empty planner buffer to ensure spindle is set when programmed.
-  protocol_auto_cycle_start();  //temp fix for M3 lockup
-  protocol_buffer_synchronize(); 
-
   // Halt or set spindle direction and rpm. 
-  if (direction == SPINDLE_DISABLE) {
+  if (state == SPINDLE_DISABLE) {
 
+	  
     spindle_stop();
 
   } else {
 
-    if (direction == SPINDLE_ENABLE_CW) {
-      SPINDLE_DIRECTION_PORT &= ~(1<<SPINDLE_DIRECTION_BIT);
-    } else {
-      SPINDLE_DIRECTION_PORT |= (1<<SPINDLE_DIRECTION_BIT);
-    }
+    #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
+      if (state == SPINDLE_ENABLE_CW) {
+        SPINDLE_DIRECTION_PORT &= ~(1<<SPINDLE_DIRECTION_BIT);
+      } else {
+        SPINDLE_DIRECTION_PORT |= (1<<SPINDLE_DIRECTION_BIT);
+      }
+    #endif
 
     #ifdef VARIABLE_SPINDLE
       // TODO: Install the optional capability for frequency-based output for servos.
-      #define SPINDLE_RPM_RANGE (SPINDLE_MAX_RPM-SPINDLE_MIN_RPM)
-      TCCRA_REGISTER = (1<<COMB_BIT) | (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);
-      TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02; // set to 1/8 Prescaler
-      rpm -= SPINDLE_MIN_RPM;
-      if ( rpm > SPINDLE_RPM_RANGE ) { rpm = SPINDLE_RPM_RANGE; } // Prevent uint8 overflow
-      uint8_t current_pwm = floor( rpm*(255.0/SPINDLE_RPM_RANGE) + 0.5);
-      OCR_REGISTER = current_pwm;
-    
-      #ifndef CPU_MAP_ATMEGA328P // On the Uno, spindle enable and PWM are shared.
-        SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
+      #ifdef CPU_MAP_ATMEGA2560
+      	TCCRA_REGISTER = (1<<COMB_BIT) | (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);
+        TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02 | (1<<WAVE2_REGISTER) | (1<<WAVE3_REGISTER); // set to 1/8 Prescaler
+        OCR4A = 0xFFFF; // set the top 16bit value
+        uint16_t current_pwm;
+      #else
+        TCCRA_REGISTER = (1<<COMB_BIT) | (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);
+        TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02; // set to 1/8 Prescaler
+        uint8_t current_pwm;
       #endif
+
+      #define SPINDLE_RPM_RANGE (SPINDLE_MAX_RPM-SPINDLE_MIN_RPM)
+      if ( rpm < SPINDLE_MIN_RPM ) { rpm = 0; } 
+      else { 
+        rpm -= SPINDLE_MIN_RPM; 
+        if ( rpm > SPINDLE_RPM_RANGE ) { rpm = SPINDLE_RPM_RANGE; } // Prevent integer overflow
+      }
+      current_pwm = floor( rpm*(PWM_MAX_VALUE/SPINDLE_RPM_RANGE) + 0.5);
+      #ifdef MINIMUM_SPINDLE_PWM
+        if (current_pwm < MINIMUM_SPINDLE_PWM) { current_pwm = MINIMUM_SPINDLE_PWM; }
+      #endif
+      OCR_REGISTER = current_pwm; // Set PWM pin output
+    
+      // On the Uno, spindle enable and PWM are shared, unless otherwise specified.
+      #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN) 
+        #ifdef INVERT_SPINDLE_ENABLE_PIN
+          SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+        #else
+          SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
+        #endif
+      #endif
+      
     #else   
-      SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
-	  
+      #ifdef INVERT_SPINDLE_ENABLE_PIN
+		SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+	  #else
+		SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
+	  #endif
     #endif
-	
-	  #ifdef CARVIN
-			set_led(&spindle_led, LED_FULL_ON,1);
-			set_led(&door_led, LED_FULL_OFF,5);
-		#endif
+		
+		#ifdef CARVIN
+			set_led(&spindle_led, LED_FULL_ON,3);
+			set_led(&door_led, LED_FULL_OFF,3);
+	  #endif
+
   }
+}
+
+
+void spindle_run(uint8_t state, float rpm)
+{
+  if (sys.state == STATE_CHECK_MODE) { return; }
+  protocol_buffer_synchronize(); // Empty planner buffer to ensure spindle is set when programmed.  
+  spindle_set_state(state, rpm);
+	/*
+	#ifdef CARVIN
+			set_led(&spindle_led, LED_FULL_ON,3);
+			set_led(&door_led, LED_FULL_OFF,3);
+	#endif
+	*/
 }

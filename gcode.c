@@ -1,9 +1,10 @@
 /*
   gcode.c - rs274/ngc parser.
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
-  
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
+
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
@@ -17,22 +18,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/  
 
-#include "system.h"
-#include "settings.h"
-#include "protocol.h"
-#include "gcode.h"
-#include "motion_control.h"
-#include "spindle_control.h"
-#include "coolant_control.h"
-#include "probe.h"
-#include "report.h"
+#include "grbl.h"
 
 // NOTE: Max line number is defined by the g-code standard to be 99999. It seems to be an
 // arbitrary value, and some GUIs may require more. So we increased it based on a max safe
@@ -66,10 +53,7 @@ void gc_init()
 // limit pull-off routines.
 void gc_sync_position() 
 {
-  uint8_t i;
-  for (i=0; i<N_AXIS; i++) {
-    gc_state.position[i] = sys.position[i]/settings.steps_per_mm[i];
-  }
+  system_convert_array_steps_to_mpos(gc_state.position,sys.position);
 }
 
 
@@ -123,8 +107,7 @@ uint8_t gc_execute_line(char *line)
   char letter;
   float value;
   uint8_t int_value = 0;
-  uint8_t mantissa = 0; // NOTE: For mantissa values > 255, variable type must be changed to uint16_t.
-
+  uint16_t mantissa = 0;
 
   while (line[char_counter] != 0) { // Loop until no more g-code words in line.
     
@@ -210,11 +193,10 @@ uint8_t gc_execute_line(char *line)
               case 3: gc_block.modal.motion = MOTION_MODE_CCW_ARC; break; // G3
               case 38: 
                 switch(mantissa) {
-                  case 20: gc_block.modal.motion = MOTION_MODE_PROBE; break;  // G38.2
-                  // NOTE: If G38.3+ are enabled, change mantissa variable type to uint16_t.
-                  // case 30: gc_block.modal.motion = MOTION_MODE_PROBE_NO_ERROR; break; // G38.3 Not supported.
-                  // case 40: // Not supported.
-                  // case 50: // Not supported.
+                  case 20: gc_block.modal.motion = MOTION_MODE_PROBE_TOWARD; break; // G38.2
+                  case 30: gc_block.modal.motion = MOTION_MODE_PROBE_TOWARD_NO_ERROR; break; // G38.3
+                  case 40: gc_block.modal.motion = MOTION_MODE_PROBE_AWAY; break; // G38.4
+                  case 50: gc_block.modal.motion = MOTION_MODE_PROBE_AWAY_NO_ERROR; break; // G38.5
                   default: FAIL(STATUS_GCODE_UNSUPPORTED_COMMAND); // [Unsupported G38.x command]
                 }
                 mantissa = 0; // Set to zero to indicate valid non-integer G command.
@@ -231,9 +213,16 @@ uint8_t gc_execute_line(char *line)
             }
             break;
           case 90: case 91: 
-            word_bit = MODAL_GROUP_G3; 
-            if (int_value == 90) { gc_block.modal.distance = DISTANCE_MODE_ABSOLUTE; } // G90
-            else { gc_block.modal.distance = DISTANCE_MODE_INCREMENTAL; } // G91            
+            if (mantissa == 0) {
+              word_bit = MODAL_GROUP_G3; 
+              if (int_value == 90) { gc_block.modal.distance = DISTANCE_MODE_ABSOLUTE; } // G90
+              else { gc_block.modal.distance = DISTANCE_MODE_INCREMENTAL; } // G91
+            } else {
+              word_bit = MODAL_GROUP_G4;
+              if ((mantissa != 10) || (int_value == 90)) { FAIL(STATUS_GCODE_UNSUPPORTED_COMMAND); } // [G90.1 not supported]
+              mantissa = 0; // Set to zero to indicate valid non-integer G command.
+              // Otherwise, arc IJK incremental mode is default. G91.1 does nothing.
+            }
             break;
           case 93: case 94: 
             word_bit = MODAL_GROUP_G5; 
@@ -244,6 +233,12 @@ uint8_t gc_execute_line(char *line)
             word_bit = MODAL_GROUP_G6; 
             if (int_value == 20) { gc_block.modal.units = UNITS_MODE_INCHES; }  // G20
             else { gc_block.modal.units = UNITS_MODE_MM; } // G21
+            break;
+          case 40:
+            word_bit = MODAL_GROUP_G7;
+            // NOTE: Not required since cutter radius compensation is always disabled. Only here
+            // to support G40 commands that often appear in g-code program headers to setup defaults.
+            // gc_block.modal.cutter_comp = CUTTER_COMP_DISABLE; // G40
             break;
           case 43: case 49:
             word_bit = MODAL_GROUP_G8;
@@ -286,11 +281,16 @@ uint8_t gc_execute_line(char *line)
               case 2: case 30: gc_block.modal.program_flow = PROGRAM_FLOW_COMPLETED; break; // Program end and reset 
             }
             break;
-          case 3: case 4: case 5: 
+          #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
+            case 4: 
+          #endif
+          case 3: case 5:
             word_bit = MODAL_GROUP_M7; 
             switch(int_value) {
               case 3: gc_block.modal.spindle = SPINDLE_ENABLE_CW; break;
-              case 4: gc_block.modal.spindle = SPINDLE_ENABLE_CCW; break;
+              #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
+                case 4: gc_block.modal.spindle = SPINDLE_ENABLE_CCW; break;
+              #endif
               case 5: gc_block.modal.spindle = SPINDLE_DISABLE; break;
             }
             break;            
@@ -308,7 +308,7 @@ uint8_t gc_execute_line(char *line)
             }
             break;
           default: FAIL(STATUS_GCODE_UNSUPPORTED_COMMAND); // [Unsupported M command]
-        }            
+        }
       
         // Check for more than one command per modal group violations in the current block
         // NOTE: Variable 'word_bit' is always assigned, if the command is valid.
@@ -490,7 +490,10 @@ uint8_t gc_execute_line(char *line)
     }
   }
   
-  // [13. Cutter radius compensation ]: NOT SUPPORTED. Error, if G53 is active.
+  // [13. Cutter radius compensation ]: G41/42 NOT SUPPORTED. Error, if enabled while G53 is active.
+  // [G40 Errors]: G2/3 arc is programmed after a G40. The linear move after disabling is less than tool diameter.
+  //   NOTE: Since cutter radius compensation is never enabled, these G40 errors don't apply. Grbl supports G40 
+  //   only for the purpose to not error when G40 is sent with a g-code program header to setup the default modes.
   
   // [14. Cutter length compensation ]: G43 NOT SUPPORTED, but G43.1 and G49 are. 
   // [G43.1 Errors]: Motion command in same line. 
@@ -800,7 +803,8 @@ uint8_t gc_execute_line(char *line)
             }
           }
           break;
-        case MOTION_MODE_PROBE:
+        case MOTION_MODE_PROBE_TOWARD: case MOTION_MODE_PROBE_TOWARD_NO_ERROR:
+        case MOTION_MODE_PROBE_AWAY: case MOTION_MODE_PROBE_AWAY_NO_ERROR:
           // [G38 Errors]: Target is same current. No axis words. Cutter compensation is enabled. Feed rate
           //   is undefined. Probe is triggered. NOTE: Probe check moved to probe cycle. Instead of returning
           //   an error, it issues an alarm to prevent further motion to the probe. It's also done there to 
@@ -827,6 +831,9 @@ uint8_t gc_execute_line(char *line)
      need to update the state and execute the block according to the order-of-execution.
   */ 
   
+  // [0. Non-specific/common error-checks and miscellaneous setup]: 
+  gc_state.line_number = gc_block.values.n;
+  
   // [1. Comments feedback ]:  NOT SUPPORTED
   
   // [2. Set feed rate mode ]:
@@ -837,10 +844,9 @@ uint8_t gc_execute_line(char *line)
 
   // [4. Set spindle speed ]:
   if (gc_state.spindle_speed != gc_block.values.s) { 
-    gc_state.spindle_speed = gc_block.values.s; 
-    
     // Update running spindle only if not in check mode and not already enabled.
-    if (gc_state.modal.spindle != SPINDLE_DISABLE) { spindle_run(gc_state.modal.spindle, gc_state.spindle_speed); }
+    if (gc_state.modal.spindle != SPINDLE_DISABLE) { spindle_run(gc_state.modal.spindle, gc_block.values.s); }
+    gc_state.spindle_speed = gc_block.values.s; 
   }
     
   // [5. Select tool ]: NOT SUPPORTED. Only tracks tool value.
@@ -850,15 +856,15 @@ uint8_t gc_execute_line(char *line)
 
   // [7. Spindle control ]:
   if (gc_state.modal.spindle != gc_block.modal.spindle) {
-    gc_state.modal.spindle = gc_block.modal.spindle;    
     // Update spindle control and apply spindle speed when enabling it in this block.    
-    spindle_run(gc_state.modal.spindle, gc_state.spindle_speed);
+    spindle_run(gc_block.modal.spindle, gc_state.spindle_speed);
+    gc_state.modal.spindle = gc_block.modal.spindle;    
   }
 
   // [8. Coolant control ]:  
   if (gc_state.modal.coolant != gc_block.modal.coolant) {
+    coolant_run(gc_block.modal.coolant);
     gc_state.modal.coolant = gc_block.modal.coolant;
-    coolant_run(gc_state.modal.coolant);
   }
   
   // [9. Enable/disable feed rate or spindle overrides ]: NOT SUPPORTED
@@ -872,7 +878,8 @@ uint8_t gc_execute_line(char *line)
   // [12. Set length units ]:
   gc_state.modal.units = gc_block.modal.units;
 
-  // [13. Cutter radius compensation ]: NOT SUPPORTED
+  // [13. Cutter radius compensation ]: G41/42 NOT SUPPORTED
+  // gc_state.modal.cutter_comp = gc_block.modal.cutter_comp; // NOTE: Not needed since always disabled.
 
   // [14. Cutter length compensation ]: G43.1 and G49 supported. G43 NOT SUPPORTED.
   // NOTE: If G43 were supported, its operation wouldn't be any different from G43.1 in terms
@@ -912,13 +919,13 @@ uint8_t gc_execute_line(char *line)
       // and absolute and incremental modes.
       if (axis_command) {
         #ifdef USE_LINE_NUMBERS
-          mc_line(gc_block.values.xyz, -1.0, false, gc_block.values.n);
+          mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
         #else
           mc_line(gc_block.values.xyz, -1.0, false);
         #endif
       }
       #ifdef USE_LINE_NUMBERS
-        mc_line(parameter_data, -1.0, false, gc_block.values.n); 
+        mc_line(parameter_data, -1.0, false, gc_state.line_number); 
       #else
         mc_line(parameter_data, -1.0, false); 
       #endif
@@ -948,41 +955,71 @@ uint8_t gc_execute_line(char *line)
       switch (gc_state.modal.motion) {
         case MOTION_MODE_SEEK:
           #ifdef USE_LINE_NUMBERS
-            mc_line(gc_block.values.xyz, -1.0, false, gc_block.values.n);
+            mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
           #else
             mc_line(gc_block.values.xyz, -1.0, false);
           #endif
           break;
         case MOTION_MODE_LINEAR:
           #ifdef USE_LINE_NUMBERS
-            mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, gc_block.values.n);
+            mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, gc_state.line_number);
           #else
             mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate);
           #endif
           break;
-        case MOTION_MODE_CW_ARC: case MOTION_MODE_CCW_ARC:
+        case MOTION_MODE_CW_ARC: 
           #ifdef USE_LINE_NUMBERS
             mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, gc_block.values.n);  
+              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, true, gc_state.line_number);  
           #else
             mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear); 
+              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, true); 
+          #endif
+          break;        
+        case MOTION_MODE_CCW_ARC:
+          #ifdef USE_LINE_NUMBERS
+            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
+              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, false, gc_state.line_number);  
+          #else
+            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
+              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, false); 
           #endif
           break;
-        case MOTION_MODE_PROBE:
+        case MOTION_MODE_PROBE_TOWARD: 
           // NOTE: gc_block.values.xyz is returned from mc_probe_cycle with the updated position value. So
           // upon a successful probing cycle, the machine position and the returned value should be the same.
           #ifdef USE_LINE_NUMBERS
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, gc_block.values.n);
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, false, gc_state.line_number);
           #else
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate);
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, false);
+          #endif
+          break;
+        case MOTION_MODE_PROBE_TOWARD_NO_ERROR:
+          #ifdef USE_LINE_NUMBERS
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, true, gc_state.line_number);
+          #else
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, true);
+          #endif
+          break;
+        case MOTION_MODE_PROBE_AWAY:
+          #ifdef USE_LINE_NUMBERS
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, false, gc_state.line_number);
+          #else
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, false);
+          #endif
+          break;
+        case MOTION_MODE_PROBE_AWAY_NO_ERROR:
+          #ifdef USE_LINE_NUMBERS
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, true, gc_state.line_number);
+          #else        
+            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, true);
           #endif
       }
     
       // As far as the parser is concerned, the position is now == target. In reality the
       // motion control system might still be processing the action and the real tool position
       // in any intermediate location.
-      memcpy(gc_state.position, gc_block.values.xyz, sizeof(gc_block.values.xyz)); // gc.position[] = target[];
+      memcpy(gc_state.position, gc_block.values.xyz, sizeof(gc_block.values.xyz)); // gc_state.position[] = gc_block.values.xyz[]
     }
   }
   
@@ -992,12 +1029,14 @@ uint8_t gc_execute_line(char *line)
   gc_state.modal.program_flow = gc_block.modal.program_flow;
   if (gc_state.modal.program_flow) { 
     protocol_buffer_synchronize(); // Finish all remaining buffered motions. Program paused when complete.
-    sys.auto_start = false; // Disable auto cycle start. Forces pause until cycle start issued.
+
+    sys.suspend = true;
+    protocol_execute_realtime(); // Suspend execution. For both program pause or program end.
   
     // If complete, reset to reload defaults (G92.2,G54,G17,G90,G94,M48,G40,M5,M9). Otherwise,
     // re-enable program flow after pause complete, where cycle start will resume the program.
     if (gc_state.modal.program_flow == PROGRAM_FLOW_COMPLETED) { mc_reset(); }
-    else { gc_state.modal.program_flow = PROGRAM_FLOW_RUNNING; }
+    else { gc_state.modal.program_flow = PROGRAM_FLOW_RUNNING; } // Resume from program pause.
   }
     
   // TODO: % to denote start of program. Sets auto cycle start?
@@ -1022,9 +1061,9 @@ uint8_t gc_execute_line(char *line)
    group 1 = {G81 - G89} (Motion modes: Canned cycles)
    group 4 = {M1} (Optional stop, ignored)
    group 6 = {M6} (Tool change)
-   group 7 = {G40, G41, G42} cutter radius compensation
-   group 8 = {G43} tool length offset (But G43.1/G94 IS SUPPORTED)
-   group 8 = {*M7} enable mist coolant
+   group 7 = {G41, G42} cutter radius compensation (G40 is supported)
+   group 8 = {G43} tool length offset (G43.1/G49 are supported)
+   group 8 = {*M7} enable mist coolant (* Compile-option)
    group 9 = {M48, M49} enable/disable feed and speed override switches
    group 10 = {G98, G99} return mode canned cycles
    group 13 = {G61, G61.1, G64} path control mode

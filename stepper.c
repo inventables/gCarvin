@@ -1,8 +1,9 @@
 /*
   stepper.c - stepper motor driver: executes motion plans using stepper motors
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,19 +18,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/ 
 
-#include "system.h"
-#include "nuts_bolts.h"
-#include "stepper.h"
-#include "settings.h"
-#include "planner.h"
-#include "probe.h"
+#include "grbl.h"
 
 
 // Some useful constants.
@@ -130,9 +120,7 @@ static st_block_t *st_prep_block;  // Pointer to the stepper block data being pr
 // based on the current executing planner block.
 typedef struct {
   uint8_t st_block_index;  // Index of stepper common data block being prepped
-  uint8_t flag_partial_block;  // Flag indicating the last block completed. Time to load a new one.
 
-  float steps_remaining;
   float step_per_mm;           // Current planner block step/millimeter conversion scalar
   float req_mm_increment;
   float dt_remainder;
@@ -196,7 +184,7 @@ void st_wake_up()
   if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
   else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
 
-  if (sys.state & (STATE_CYCLE | STATE_HOMING)){
+//   if (sys.state & (STATE_CYCLE | STATE_HOMING)){
     // Initialize stepper output bits
     st.dir_outbits = dir_port_invert_mask; 
     st.step_outbits = step_port_invert_mask;
@@ -214,7 +202,7 @@ void st_wake_up()
 
     // Enable Stepper Driver Interrupt
     TIMSK1 |= (1<<OCIE1A);
-  }
+//   }
 }
 
 
@@ -228,7 +216,7 @@ void st_go_idle()
   
   // Set stepper driver idle state, disabled or enabled, depending on settings and circumstances.
   bool pin_state = false; // Keep enabled.
-  if (((settings.stepper_idle_lock_time != 0xff) || bit_istrue(sys.execute,EXEC_ALARM)) && sys.state != STATE_HOMING) {
+  if (((settings.stepper_idle_lock_time != 0xff) || sys.rt_exec_alarm) && sys.state != STATE_HOMING) {
     // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
     // stop and not drift from residual inertial forces at the end of the last movement.
     delay_ms(settings.stepper_idle_lock_time);
@@ -334,11 +322,8 @@ ISR(TIMER1_COMPA_vect)
         st.exec_block = &st_block_buffer[st.exec_block_index];
         
         // Initialize Bresenham line and distance counters
-        st.counter_x = (st.exec_block->step_event_count >> 1);
-        st.counter_y = st.counter_x;
-        st.counter_z = st.counter_x;        
+        st.counter_x = st.counter_y = st.counter_z = (st.exec_block->step_event_count >> 1);
       }
-
       st.dir_outbits = st.exec_block->direction_bits ^ dir_port_invert_mask; 
 
       #ifdef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
@@ -351,7 +336,7 @@ ISR(TIMER1_COMPA_vect)
     } else {
       // Segment buffer empty. Shutdown.
       st_go_idle();
-      bit_true_atomic(sys.execute,EXEC_CYCLE_STOP); // Flag main program for cycle end
+      bit_true_atomic(sys.rt_exec_state,EXEC_CYCLE_STOP); // Flag main program for cycle end
       return; // Nothing to do but exit.
     }  
   }
@@ -512,7 +497,6 @@ void stepper_init()
 void st_update_plan_block_parameters()
 { 
   if (pl_block != NULL) { // Ignore if at start of a new block.
-    prep.flag_partial_block = true;
     pl_block->entry_speed_sqr = prep.current_speed*prep.current_speed; // Update entry speed.
     pl_block = NULL; // Flag st_prep_segment() to load new velocity profile.
   }
@@ -533,56 +517,51 @@ void st_update_plan_block_parameters()
    NOTE: Computation units are in steps, millimeters, and minutes.
 */
 void st_prep_buffer()
-{
+{  
   while (segment_buffer_tail != segment_next_head) { // Check if we need to fill the buffer.
 
     // Determine if we need to load a new planner block or if the block has been replanned. 
     if (pl_block == NULL) {
-      pl_block = plan_get_current_block(); // Query planner for a queued block
+       // Query planner for a queued block
+      if (sys.suspend & SUSPEND_EXECUTE_PARK) { pl_block = plan_get_parking_block(); }
+      else { pl_block = plan_get_current_block(); }
       if (pl_block == NULL) { return; } // No planner blocks. Exit.
                       
-      // Check if the segment buffer completed the last planner block. If so, load the Bresenham
-      // data for the block. If not, we are still mid-block and the velocity profile was updated. 
-      if (prep.flag_partial_block) {
-        prep.flag_partial_block = false; // Reset flag
-      } else {
-        // Increment stepper common data index to store new planner block data. 
-        if ( ++prep.st_block_index == (SEGMENT_BUFFER_SIZE-1) ) { prep.st_block_index = 0; }
-        
-        // Prepare and copy Bresenham algorithm segment data from the new planner block, so that
-        // when the segment buffer completes the planner block, it may be discarded when the 
-        // segment buffer finishes the prepped block, but the stepper ISR is still executing it. 
-        st_prep_block = &st_block_buffer[prep.st_block_index];
-        st_prep_block->direction_bits = pl_block->direction_bits;
-        #ifndef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
-          st_prep_block->steps[X_AXIS] = pl_block->steps[X_AXIS];
-          st_prep_block->steps[Y_AXIS] = pl_block->steps[Y_AXIS];
-          st_prep_block->steps[Z_AXIS] = pl_block->steps[Z_AXIS];
-          st_prep_block->step_event_count = pl_block->step_event_count;
-        #else
-          // With AMASS enabled, simply bit-shift multiply all Bresenham data by the max AMASS 
-          // level, such that we never divide beyond the original data anywhere in the algorithm.
-          // If the original data is divided, we can lose a step from integer roundoff.
-          st_prep_block->steps[X_AXIS] = pl_block->steps[X_AXIS] << MAX_AMASS_LEVEL;
-          st_prep_block->steps[Y_AXIS] = pl_block->steps[Y_AXIS] << MAX_AMASS_LEVEL;
-          st_prep_block->steps[Z_AXIS] = pl_block->steps[Z_AXIS] << MAX_AMASS_LEVEL;
-          st_prep_block->step_event_count = pl_block->step_event_count << MAX_AMASS_LEVEL;
-        #endif
-        
-        // Initialize segment buffer data for generating the segments.
-        prep.steps_remaining = pl_block->step_event_count;
-        prep.step_per_mm = prep.steps_remaining/pl_block->millimeters;
-        prep.req_mm_increment = REQ_MM_INCREMENT_SCALAR/prep.step_per_mm;
-        
-        prep.dt_remainder = 0.0; // Reset for new planner block
-
-        if (sys.state == STATE_HOLD) {
-          // Override planner block entry speed and enforce deceleration during feed hold.
-          prep.current_speed = prep.exit_speed; 
-          pl_block->entry_speed_sqr = prep.exit_speed*prep.exit_speed; 
+      // Load the Bresenham stepping data for the block. 
+      if ( ++prep.st_block_index == (SEGMENT_BUFFER_SIZE-1) ) { prep.st_block_index = 0; }
+      
+      // Prepare and copy Bresenham algorithm segment data from the new planner block, so that
+      // when the segment buffer completes the planner block, it may be discarded when the 
+      // segment buffer finishes the prepped block, but the stepper ISR is still executing it. 
+      st_prep_block = &st_block_buffer[prep.st_block_index];
+      st_prep_block->direction_bits = pl_block->direction_bits;
+      uint8_t idx;
+      #ifndef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
+        for (idx=0; idx<N_AXIS; idx++) {
+          st_prep_block->steps[idx] = pl_block->steps[idx];
         }
-        else { prep.current_speed = sqrt(pl_block->entry_speed_sqr); }
+        st_prep_block->step_event_count = pl_block->step_event_count;
+      #else
+        // With AMASS enabled, simply bit-shift multiply all Bresenham data by the max AMASS 
+        // level, such that we never divide beyond the original data anywhere in the algorithm.
+        // If the original data is divided, we can lose a step from integer roundoff.
+        for (idx=0; idx<N_AXIS; idx++) {
+          st_prep_block->steps[idx] = pl_block->steps[idx] << MAX_AMASS_LEVEL;
+        }
+        st_prep_block->step_event_count = pl_block->step_event_count << MAX_AMASS_LEVEL;
+      #endif
+      
+      // Initialize segment buffer data for generating the segments.
+      prep.step_per_mm = pl_block->steps_remaining/pl_block->millimeters;
+      prep.req_mm_increment = REQ_MM_INCREMENT_SCALAR/prep.step_per_mm;
+      prep.dt_remainder = 0.0; // Reset for new segment block
+
+      if (sys.suspend & SUSPEND_EXECUTE_HOLD) {
+        // Override planner block entry speed and enforce deceleration during feed hold.
+        prep.current_speed = prep.exit_speed; 
+        pl_block->entry_speed_sqr = prep.exit_speed*prep.exit_speed; 
       }
+      else { prep.current_speed = sqrt(pl_block->entry_speed_sqr); }
      
       /* --------------------------------------------------------------------------------- 
          Compute the velocity profile of a new planner block based on its entry and exit
@@ -592,7 +571,7 @@ void st_prep_buffer()
       */
       prep.mm_complete = 0.0; // Default velocity profile complete at 0.0mm from end of block.
       float inv_2_accel = 0.5/pl_block->acceleration;
-      if (sys.state == STATE_HOLD) { // [Forced Deceleration to Zero Velocity]
+      if (sys.suspend & SUSPEND_EXECUTE_HOLD) { // [Forced Deceleration to Zero Velocity]
         // Compute velocity profile parameters for a feed hold in-progress. This profile overrides
         // the planner block profile, enforcing a deceleration to zero speed.
         prep.ramp_type = RAMP_DECEL;
@@ -609,7 +588,10 @@ void st_prep_buffer()
         // Compute or recompute velocity profile parameters of the prepped planner block.
         prep.ramp_type = RAMP_ACCEL; // Initialize as acceleration ramp.
         prep.accelerate_until = pl_block->millimeters; 
-        prep.exit_speed = plan_get_exec_block_exit_speed();   
+        
+        if (sys.suspend & SUSPEND_EXECUTE_PARK) { prep.exit_speed = 0.0; }
+        else { prep.exit_speed = plan_get_exec_block_exit_speed(); }
+        
         float exit_speed_sqr = prep.exit_speed*prep.exit_speed;
         float intersect_distance =
                 0.5*(pl_block->millimeters+inv_2_accel*(pl_block->entry_speed_sqr-exit_speed_sqr));
@@ -746,21 +728,19 @@ void st_prep_buffer()
     */
     float steps_remaining = prep.step_per_mm*mm_remaining; // Convert mm_remaining to steps
     float n_steps_remaining = ceil(steps_remaining); // Round-up current steps remaining
-    float last_n_steps_remaining = ceil(prep.steps_remaining); // Round-up last steps remaining
+    float last_n_steps_remaining = ceil(pl_block->steps_remaining); // Round-up last steps remaining
     prep_segment->n_step = last_n_steps_remaining-n_steps_remaining; // Compute number of steps to execute.
     
     // Bail if we are at the end of a feed hold and don't have a step to execute.
     if (prep_segment->n_step == 0) {
-      if (sys.state == STATE_HOLD) {
-
+      if (sys.suspend & SUSPEND_EXECUTE_HOLD) {
         // Less than one step to decelerate to zero speed, but already very close. AMASS 
         // requires full steps to execute. So, just bail.
-        prep.current_speed = 0.0;
-        prep.dt_remainder = 0.0;
-        prep.steps_remaining = n_steps_remaining;
-        pl_block->millimeters = prep.steps_remaining/prep.step_per_mm; // Update with full steps.
+        prep.current_speed = 0.0; // NOTE: (=0.0) Used to indicate completed segment calcs for hold.
+        pl_block->steps_remaining = n_steps_remaining;
+        pl_block->millimeters = n_steps_remaining/prep.step_per_mm; // Update with full steps.
         plan_cycle_reinitialize();         
-        sys.state = STATE_QUEUED; 
+        bit_true(sys.suspend,SUSPEND_NO_MOTION);
         return; // Segment not generated, but current step data still retained.
       }
     }
@@ -819,26 +799,28 @@ void st_prep_buffer()
     if (mm_remaining > prep.mm_complete) { 
       // Normal operation. Block incomplete. Distance remaining in block to be executed.
       pl_block->millimeters = mm_remaining;      
-      prep.steps_remaining = steps_remaining;  
+      pl_block->steps_remaining = steps_remaining;  
     } else { 
       // End of planner block or forced-termination. No more distance to be executed.
       if (mm_remaining > 0.0) { // At end of forced-termination.
-        // Reset prep parameters for resuming and then bail.
-        // NOTE: Currently only feed holds qualify for this scenario. May change with overrides.       
-        prep.current_speed = 0.0;
-        prep.dt_remainder = 0.0;
-        prep.steps_remaining = ceil(steps_remaining);
-        pl_block->millimeters = prep.steps_remaining/prep.step_per_mm; // Update with full steps.
-        plan_cycle_reinitialize(); 
-        sys.state = STATE_QUEUED; // End cycle.        
-
+        // Reset prep parameters for resuming and then bail. Allow the stepper ISR to complete
+        // the segment queue, where realtime protocol will set new state upon receiving the 
+        // cycle stop flag from the ISR. Prep_segment is blocked until then.
+        prep.current_speed = 0.0; // NOTE: (=0.0) Used to indicate completed segment calcs for hold.
+        pl_block->steps_remaining = ceil(steps_remaining);
+        pl_block->millimeters = pl_block->steps_remaining/prep.step_per_mm; // Update with full steps.
+        plan_cycle_reinitialize();
+        if (sys.suspend & SUSPEND_EXECUTE_HOLD) { bit_true(sys.suspend,SUSPEND_NO_MOTION); }
         return; // Bail!
-// TODO: Try to move QUEUED setting into cycle re-initialize.
-
       } else { // End of planner block
         // The planner block is complete. All steps are set to be executed in the segment buffer.
-        pl_block = NULL;
-        plan_discard_current_block();
+        if (sys.suspend & SUSPEND_EXECUTE_PARK) { 
+          bit_true(sys.suspend,SUSPEND_NO_MOTION);
+          plan_cycle_reinitialize();
+          return; 
+        }
+		pl_block = NULL; // Set pointer to indicate check and load next planner block.
+		plan_discard_current_block();
       }
     }
 
@@ -846,14 +828,14 @@ void st_prep_buffer()
 }      
 
 
-// Called by runtime status reporting to fetch the current speed being executed. This value
+// Called by realtime status reporting to fetch the current speed being executed. This value
 // however is not exactly the current speed, but the speed computed in the last step segment
 // in the segment buffer. It will always be behind by up to the number of segment blocks (-1)
 // divided by the ACCELERATION TICKS PER SECOND in seconds. 
 #ifdef REPORT_REALTIME_RATE
   float st_get_realtime_rate()
   {
-     if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_HOLD)){
+     if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_HOLD | STATE_MOTION_CANCEL | STATE_SAFETY_DOOR)){
        return prep.current_speed;
      }
     return 0.0f;

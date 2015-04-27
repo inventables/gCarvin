@@ -1,8 +1,9 @@
 /*
   serial.c - Low level functions for sending and recieving bytes via the serial port
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,21 +18,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/ 
 
-#include <avr/interrupt.h>
-#include "system.h"
-#include "serial.h"
-#include "motion_control.h"
-#include "protocol.h"
-#ifdef CARVIN
-	#include "carvin.h"
-#endif
+#include "grbl.h"
 
 
 uint8_t serial_rx_buffer[RX_BUFFER_SIZE];
@@ -101,7 +89,7 @@ void serial_write(uint8_t data) {
   // Wait until there is space in the buffer
   while (next_head == serial_tx_buffer_tail) { 
     // TODO: Restructure st_prep_buffer() calls to be executed here during a long print.    
-    if (sys.execute & EXEC_RESET) { return; } // Only check for abort to avoid an endless loop.
+    if (sys.rt_exec_state & EXEC_RESET) { return; } // Only check for abort to avoid an endless loop.
   }
 
   // Store data and advance head
@@ -173,13 +161,13 @@ ISR(SERIAL_RX)
   uint8_t data = UDR0;
   uint8_t next_head;
   
-  // Pick off runtime command characters directly from the serial stream. These characters are
-  // not passed into the buffer, but these set system state flag bits for runtime execution.
+  // Pick off realtime command characters directly from the serial stream. These characters are
+  // not passed into the buffer, but these set system state flag bits for realtime execution.
   switch (data) {
-    case CMD_STATUS_REPORT: bit_true_atomic(sys.execute, EXEC_STATUS_REPORT); break; // Set as true
-    case CMD_CYCLE_START:   bit_true_atomic(sys.execute, EXEC_CYCLE_START); break; // Set as true
-    case CMD_FEED_HOLD:     bit_true_atomic(sys.execute, EXEC_FEED_HOLD); throb_led(&button_led, 30,3); break; // Set as true
-		case CMD_CPU_RESET:     reset_cpu(); break;  // reset the cpu for firmware upload.
+    case CMD_STATUS_REPORT: bit_true_atomic(sys.rt_exec_state, EXEC_STATUS_REPORT); break; // Set as true
+    case CMD_CYCLE_START:   bit_true_atomic(sys.rt_exec_state, EXEC_CYCLE_START); break; // Set as true
+    case CMD_FEED_HOLD:     bit_true_atomic(sys.rt_exec_state, EXEC_FEED_HOLD); break; // Set as true
+    case CMD_SAFETY_DOOR:   bit_true_atomic(sys.rt_exec_state, EXEC_SAFETY_DOOR); break; // Set as true
     case CMD_RESET:         mc_reset(); break; // Call motion control reset routine.
     default: // Write character to buffer    
       next_head = serial_rx_buffer_head + 1;

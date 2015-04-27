@@ -1,8 +1,9 @@
 /*
   stepper.h - stepper motor driver: executes motion plans of planner.c using the stepper motors
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,12 +18,6 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011 Sungeun K. Jeon
-*/ 
 
 #ifndef stepper_h
 #define stepper_h 
@@ -34,7 +29,7 @@
 // Initialize and setup the stepper motor subsystem
 void stepper_init();
 
-// Enable steppers, but cycle does not start unless called by motion control or runtime command.
+// Enable steppers, but cycle does not start unless called by motion control or realtime command.
 void st_wake_up();
 
 // Immediately disables steppers
@@ -46,13 +41,13 @@ void st_generate_step_dir_invert_masks();
 // Reset the stepper subsystem variables       
 void st_reset();
              
-// Reloads step segment buffer. Called continuously by runtime execution system.
+// Reloads step segment buffer. Called continuously by realtime execution system.
 void st_prep_buffer();
 
 // Called by planner_recalculate() when the executing block is updated by the new plan.
 void st_update_plan_block_parameters();
 
-// Called by runtime status reporting if realtime rate reporting is enabled in config.h.
+// Called by realtime status reporting if realtime rate reporting is enabled in config.h.
 #ifdef REPORT_REALTIME_RATE
 float st_get_realtime_rate();
 #endif

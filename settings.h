@@ -1,8 +1,9 @@
 /*
   settings.h - eeprom configuration handling 
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2011-2015 Sungeun K. Jeon
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
   
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,19 +18,12 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/ 
 
 #ifndef settings_h
 #define settings_h
 
+#include "grbl.h"
 
-#define GRBL_VERSION "0.9g"
-#define GRBL_VERSION_BUILD "20140822"
 
 // Version of the EEPROM data. Will be used to migrate existing data from older versions of Grbl
 // when firmware is upgraded. Always stored in byte 0 of eeprom
@@ -37,7 +31,7 @@
 
 // Define bit flag masks for the boolean settings in settings.flag.
 #define BITFLAG_REPORT_INCHES      bit(0)
-#define BITFLAG_AUTO_START         bit(1)
+// #define BITFLAG_AUTO_START         bit(1) // Obsolete. Don't alter to keep back compatibility.
 #define BITFLAG_INVERT_ST_ENABLE   bit(2)
 #define BITFLAG_HARD_LIMIT_ENABLE  bit(3)
 #define BITFLAG_HOMING_ENABLE      bit(4)

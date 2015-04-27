@@ -1,8 +1,8 @@
 /*
   report.h - reporting and messaging methods
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon
+  Copyright (c) 2012-2015 Sungeun K. Jeon
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@
 #define STATUS_ALARM_LOCK 9
 #define STATUS_SOFT_LIMIT_ERROR 10
 #define STATUS_OVERFLOW 11
+#define STATUS_MAX_STEP_RATE_EXCEEDED 12
 
 #define STATUS_GCODE_UNSUPPORTED_COMMAND 20
 #define STATUS_GCODE_MODAL_GROUP_VIOLATION 21
@@ -53,10 +54,12 @@
 #define STATUS_GCODE_UNUSED_WORDS 36
 #define STATUS_GCODE_G43_DYNAMIC_AXIS_ERROR 37
 
-// Define Grbl alarm codes. Less than zero to distinguish alarm error from status error.
-#define ALARM_LIMIT_ERROR -1
-#define ALARM_ABORT_CYCLE -2
-#define ALARM_PROBE_FAIL -3
+// Define Grbl alarm codes.
+#define ALARM_HARD_LIMIT_ERROR 1
+#define ALARM_SOFT_LIMIT_ERROR 2
+#define ALARM_ABORT_CYCLE 3
+#define ALARM_PROBE_FAIL 4
+#define ALARM_HOMING_FAIL 5
 
 // Define Grbl feedback message codes.
 #define MESSAGE_CRITICAL_EVENT 1
@@ -64,6 +67,7 @@
 #define MESSAGE_ALARM_UNLOCK 3
 #define MESSAGE_ENABLED 4
 #define MESSAGE_DISABLED 5
+#define MESSAGE_SAFETY_DOOR_AJAR 6
 
 // Prints system status messages.
 void report_status_message(uint8_t status_code);
@@ -82,6 +86,9 @@ void report_grbl_help();
 
 // Prints Grbl global settings
 void report_grbl_settings();
+
+// Prints an echo of the pre-parsed line received right before execution.
+void report_echo_line_received(char *line);
 
 // Prints realtime status report
 void report_realtime_status();

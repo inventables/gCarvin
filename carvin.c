@@ -23,8 +23,6 @@ void carvin_init()
 	// make sure steppers are disabled at startup.	
 	STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
 	
-	
-
   // setup the LED pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
@@ -33,61 +31,71 @@ void carvin_init()
 	
 	
 	#ifdef WAIT_FOR_BUTTON
-	// -------------------- Be sure button is not in at startup ----------------------------
-	// the button may still be pushed from a prevoius power down
-	// wait until it comes up for a while
 	
 	long switch_open_count = 0;
-
-	// wait for switch to open for given time
 	
+	// -------------------- Be sure button is not pushed in at startup ----------------------------
+	// the button may still be pushed from a prevoius power down
+	// wait until it comes up for a while
+	// wait for switch to open for given time	
 	while (switch_open_count < BUTTON_UP_WAIT_TIME)
 	{
-		if (bit_istrue(PINOUT_PIN,bit(PIN_CYCLE_START)))
-			switch_open_count++;
+		if (bit_istrue(CONTROL_PIN,bit(CYCLE_START_BIT)))
+			switch_open_count++;   // count up only while button is not pushed
 		else
-			switch_open_count = 0; // reset from debounce
+			switch_open_count = 0; // reset count
 	}
 	
   // --------------------- Wait for turn on button push ---------------------------------
 	
 
   // Wait in this loop until front "on" button is pushed
-  // TO DO... make sure the push to turn off does not continue part reset and right through this  
-  while (bit_istrue(PINOUT_PIN,bit(PIN_CYCLE_START)))
+  while (bit_istrue(CONTROL_PIN,bit(CYCLE_START_BIT)))
   {
 	// do nothing until the button is pushed
-	// TO DO should we filter this so noise cannot turn on thre unit
   }
 	#endif
 	
   
-	// -------------- PWM ------------------------------
+	// -------------- Setup PWM on Timer 4 ------------------------------
 	
   //  Setup PWM For LEDs
-  //  Timer 4 ... it controls the following pins
+  //  --------- Timer 4 ... it controls the following pins ----------
   //  Mega pin 6, PORTH BIT3, OCR4A (Button LED)
-  //  Mega pin 7, PORTH BIT4, OCR4B (Door Light)
+  //  Mega pin 7, PORTH BIT4, OCR4B (Door Light)  !!!! schem error
   //  Mega pin 8, PORTH BIT5, OCR4C (Spidle Light) 
   TCCR4A = (1<<COM4A1) | (1<<COM4B1) | (1<<COM4C1) |(1<<WGM41) | (1<<WGM40);
   TCCR4B = (TCCR4B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycles
   BUTTON_LED_OCR = 0; 
-  DOOR_LED_OCR = 0;
+  //DOOR_LED_OCR = 0;
   SPINDLE_LED_OCR = 0;
+	
+	// -------------- Setup PWM on Timer 3 ------------------------------
+	
+  //  Setup PWM For Door LED
+  //  --------- Timer 3 ... it controls the following pins ----------
   
-  // ---------------- TIMER3 ISR SETUP --------------------------
+  //  Mega pin 2, PORTE BIT4, OCR3B (Door Light)  !!!! schem error
   
-  // Setup a timer3 interrupt to handle timing of things like LED animations in the background
-  TCCR3A = 0;     // Clear entire TCCR1A register
-  TCCR3B = 0;     // Clear entire TCCR1B register
+	TCCR3A = (1<<COM3B1) |(1<<WGM31) | (1<<WGM30);  
+  TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
+  //  Set initial duty cycles 
+  DOOR_LED_OCR = 700;
   
-  TCCR3B |= (1 << WGM32);  // turn on CTC mode:
-  TCCR3B |= (1 << CS32);   // divide clock/256 
   
-  OCR3A = CARVIN_TIMER3_CTC;  // set compare match register to desired timer count:
+  // ---------------- TIMER5 ISR SETUP --------------------------
   
-  TIMSK3 |= (1 << OCIE3A);  // enable timer compare interrupt (grbl turns on interrupts)
+  // Setup a timer5 interrupt to handle timing of things like LED animations in the background
+  TCCR5A = 0;     // Clear entire TCCR1A register
+  TCCR5B = 0;     // Clear entire TCCR1B register
+  
+  TCCR5B |= (1 << WGM52);  // turn on CTC mode:
+  TCCR5B |= (1 << CS52);   // divide clock/256 
+  
+  OCR5A = CARVIN_TIMING_CTC;  // set compare match register to desired timer count:
+  
+  TIMSK5 |= (1 << OCIE5A);  // enable timer compare interrupt (grbl turns on interrupts)
   
   // ----------------Initial LED SETUP -----------------------------
   
@@ -110,7 +118,7 @@ void carvin_init()
 // 	LED animations
 //  Timing the off button push
 
-ISR(TIMER3_COMPA_vect)
+ISR(TIMER5_COMPA_vect)
 {
   // see if the led values need to change
 	if (led_level_change(&button_led))
@@ -123,7 +131,7 @@ ISR(TIMER3_COMPA_vect)
 	  SPINDLE_LED_OCR = spindle_led.current_level;
 	
   // if the button is pushed, count up to see if it is held long enough to reset cpu
-  if (bit_isfalse(PINOUT_PIN,bit(PIN_CYCLE_START)))
+  if (bit_isfalse(CONTROL_PIN,bit(CYCLE_START_BIT)))
   {
 		if (off_button_counter == OFF_BUTTON_COUNT)
 			reset_cpu();
@@ -250,7 +258,7 @@ void print_sw_states()
 		else
 			printPgmString(PSTR("1"));
 			
-		if (bit_istrue(PINOUT_PIN,bit(PIN_FEED_HOLD)))
+		if (bit_istrue(CONTROL_PIN,bit(FEED_HOLD_BIT)))
 			printPgmString(PSTR("0"));
 		else
 			printPgmString(PSTR("1"));

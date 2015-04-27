@@ -1,8 +1,9 @@
 /*
   settings.c - eeprom configuration handling 
-  Part of Grbl v0.9
+  Part of Grbl
 
-  Copyright (c) 2012-2014 Sungeun K. Jeon  
+  Copyright (c) 2011-2015 Sungeun K. Jeon  
+  Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,20 +18,8 @@
   You should have received a copy of the GNU General Public License
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
-/* 
-  This file is based on work from Grbl v0.8, distributed under the 
-  terms of the MIT-license. See COPYING for more details.  
-    Copyright (c) 2009-2011 Simen Svale Skogsrud
-    Copyright (c) 2011-2012 Sungeun K. Jeon
-*/ 
 
-#include "system.h"
-#include "settings.h"
-#include "eeprom.h"
-#include "protocol.h"
-#include "report.h"
-#include "limits.h"
-#include "stepper.h"
+#include "grbl.h"
 
 settings_t settings;
 
@@ -83,7 +72,6 @@ void settings_restore_global_settings() {
 
   settings.flags = 0;
   if (DEFAULT_REPORT_INCHES) { settings.flags |= BITFLAG_REPORT_INCHES; }
-  if (DEFAULT_AUTO_START) { settings.flags |= BITFLAG_AUTO_START; }
   if (DEFAULT_INVERT_ST_ENABLE) { settings.flags |= BITFLAG_INVERT_ST_ENABLE; }
   if (DEFAULT_INVERT_LIMIT_PINS) { settings.flags |= BITFLAG_INVERT_LIMIT_PINS; }
   if (DEFAULT_SOFT_LIMIT_ENABLE) { settings.flags |= BITFLAG_SOFT_LIMIT_ENABLE; }
@@ -110,7 +98,7 @@ void settings_restore_global_settings() {
 // Helper function to clear the EEPROM space containing parameter data.
 void settings_clear_parameters() {
   uint8_t idx;
-  float coord_data[3];
+  float coord_data[N_AXIS];
   memset(&coord_data, 0, sizeof(coord_data));
   for (idx=0; idx < SETTING_INDEX_NCOORD; idx++) { settings_write_coord_data(idx, coord_data); }
 }  
@@ -169,7 +157,7 @@ uint8_t settings_read_coord_data(uint8_t coord_select, float *coord_data)
     return(false);
   }
   return(true);
-}
+}  
 
 
 // Reads Grbl global settings struct from EEPROM.
@@ -200,8 +188,18 @@ uint8_t settings_store_global_setting(uint8_t parameter, float value) {
       if (parameter < N_AXIS) {
         // Valid axis setting found.
         switch (set_idx) {
-          case 0: settings.steps_per_mm[parameter] = value; break;
-          case 1: settings.max_rate[parameter] = value; break;
+          case 0:
+            #ifdef MAX_STEP_RATE_HZ
+              if (value*settings.max_rate[parameter] > (MAX_STEP_RATE_HZ*60.0)) { return(STATUS_MAX_STEP_RATE_EXCEEDED); }
+            #endif
+            settings.steps_per_mm[parameter] = value;
+            break;
+          case 1:
+            #ifdef MAX_STEP_RATE_HZ
+              if (value*settings.steps_per_mm[parameter] > (MAX_STEP_RATE_HZ*60.0)) {  return(STATUS_MAX_STEP_RATE_EXCEEDED); }
+            #endif
+            settings.max_rate[parameter] = value;
+            break;
           case 2: settings.acceleration[parameter] = value*60*60; break; // Convert to mm/min^2 for grbl internal use.
           case 3: settings.max_travel[parameter] = -value; break;  // Store as negative for grbl internal use.
         }
@@ -241,16 +239,12 @@ uint8_t settings_store_global_setting(uint8_t parameter, float value) {
         if (int_value) { settings.flags |= BITFLAG_INVERT_PROBE_PIN; }
         else { settings.flags &= ~BITFLAG_INVERT_PROBE_PIN; }
         break;
-      case 10: settings.status_report_mask = int_value;
+      case 10: settings.status_report_mask = int_value; break;
       case 11: settings.junction_deviation = value; break;
       case 12: settings.arc_tolerance = value; break;
       case 13:
         if (int_value) { settings.flags |= BITFLAG_REPORT_INCHES; }
         else { settings.flags &= ~BITFLAG_REPORT_INCHES; }
-        break;
-      case 14: // Reset to ensure change. Immediate re-init may cause problems.
-        if (int_value) { settings.flags |= BITFLAG_AUTO_START; }
-        else { settings.flags &= ~BITFLAG_AUTO_START; }
         break;
       case 20:
         if (int_value) { 
