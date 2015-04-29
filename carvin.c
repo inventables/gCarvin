@@ -56,6 +56,7 @@ void carvin_init()
   }
 	#endif
 	
+	
   
 	// -------------- Setup PWM on Timer 4 ------------------------------
 	
@@ -71,6 +72,11 @@ void carvin_init()
   //DOOR_LED_OCR = 0;
   SPINDLE_LED_OCR = 0;
 	
+	
+	#define STEPPER_VREF_DDR     DDRE
+  #define STEPPER_VREF_PORT    PORTE
+  #define STEPPER_VREF_BIT     3   // E3 is Timer 3
+	
 	// -------------- Setup PWM on Timer 3 ------------------------------
 	
   //  Setup PWM For Door LED
@@ -78,7 +84,7 @@ void carvin_init()
   
   //  Mega pin 2, PORTE BIT4, OCR3B (Door Light)  !!!! schem error
   
-	TCCR3A = (1<<COM3B1) |(1<<WGM31) | (1<<WGM30);  
+	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycles 
   DOOR_LED_OCR = 700;
@@ -220,6 +226,11 @@ int led_level_change(struct led_analog * led)
 	
 }
 
+void set_stepper_vref(uint8_t current)
+{
+	STEPPER_VREF_OCR = current * 4;  // bump up to a 10 bit number
+}
+
 // This is a software reset using the watchdog timer
 void reset_cpu()
 {
@@ -232,34 +243,3 @@ void reset_cpu()
   }
 }
 
-// the returns the switch states in the form "SW XYZPD:11111" XYZ limits, then probe, then door
-// It is called by the "?" command in garble.
-void print_sw_states()
-{
-    printPgmString(PSTR(",SW XYZPD:")); 
-		
-		if (bit_istrue(LIMIT_PIN,bit(X_LIMIT_BIT)))
-			printPgmString(PSTR("0"));
-		else
-			printPgmString(PSTR("1"));
-	  
-		if (bit_istrue(LIMIT_PIN,bit(Y_LIMIT_BIT)))
-			printPgmString(PSTR("0"));
-		else
-			printPgmString(PSTR("1"));
-			
-		if (bit_istrue(LIMIT_PIN,bit(Z_LIMIT_BIT)))
-			printPgmString(PSTR("0"));
-		else
-			printPgmString(PSTR("1"));
-			
-		if (bit_istrue(PROBE_PIN,bit(PROBE_BIT)))
-			printPgmString(PSTR("0"));
-		else
-			printPgmString(PSTR("1"));
-			
-		if (bit_istrue(CONTROL_PIN,bit(FEED_HOLD_BIT)))
-			printPgmString(PSTR("0"));
-		else
-			printPgmString(PSTR("1"));
-}

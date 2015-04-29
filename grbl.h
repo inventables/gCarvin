@@ -22,8 +22,17 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "1.0a"
-#define GRBL_VERSION_BUILD "20150420"
+#define GRBL_VERSION "1.1.0"
+#define GRBL_VERSION_BUILD "20150428"
+
+/*  Semantic Style Versioning
+MAJOR.MINOR.PATCH [for example: 2.0.1]
+ 
+MAJOR version when you make incompatible API changes,
+MINOR version when you add functionality in a backwards-compatible manner, and
+PATCH version when you make backwards-compatible bug fixes.
+
+*/
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>

@@ -16,11 +16,7 @@
 #define BUTTON_UP_WAIT_TIME 6000
 #define OFF_BUTTON_COUNT 1000 // about 2 seconds
 
-// more human readable names for the output compare registers (PWM duty)
-#define BUTTON_LED_OCR OCR4A
-//#define DOOR_LED_OCR OCR4B  //error on schematic see next line
-#define DOOR_LED_OCR OCR3B  // temp fix
-#define SPINDLE_LED_OCR OCR4C 
+
 
 #define LED_FULL_ON 255
 #define LED_FULL_OFF 0
