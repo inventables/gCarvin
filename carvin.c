@@ -1,11 +1,8 @@
 /*
   carvin.c - Handles Carvin Controller specific items
-  Part of Grbl v0.9
+  
+  Copyright (c) 2014,2015 Bart Dring / Inventables  
 
-  Copyright (c) 2014 Bart Dring / Inventables  
-
-  GNU General Public License
-  See <http://www.gnu.org/licenses/>.
 */
 
 #include "system.h"
@@ -18,15 +15,17 @@ int off_button_counter = 0;   // this times how long the button has been held in
 void carvin_init()
 {
   
-	// -------------------------------------
 	
 	// make sure steppers are disabled at startup.	
 	STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
 	
-  // setup the LED pins as outputs
+  // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
+	STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
+	
+	
 	
 	
 	
@@ -73,21 +72,21 @@ void carvin_init()
   SPINDLE_LED_OCR = 0;
 	
 	
-	#define STEPPER_VREF_DDR     DDRE
-  #define STEPPER_VREF_PORT    PORTE
-  #define STEPPER_VREF_BIT     3   // E3 is Timer 3
+	
 	
 	// -------------- Setup PWM on Timer 3 ------------------------------
 	
   //  Setup PWM For Door LED
   //  --------- Timer 3 ... it controls the following pins ----------
-  
-  //  Mega pin 2, PORTE BIT4, OCR3B (Door Light)  !!!! schem error
+  //  PORTE BIT 3, OCR3A (stepper driver current)
+  //  PORTE BIT4, OCR3B (Door Light)  !!!! schem error
   
 	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycles 
   DOOR_LED_OCR = 700;
+	set_stepper_current(STEPPER_RUN_CURRENT);
+	
   
   
   // ---------------- TIMER5 ISR SETUP --------------------------
@@ -226,9 +225,20 @@ int led_level_change(struct led_analog * led)
 	
 }
 
-void set_stepper_vref(uint8_t current)
+void set_stepper_current(float current)
 {
-	STEPPER_VREF_OCR = current * 4;  // bump up to a 10 bit number
+	
+	float vref = 0;
+  
+  // current = VREF /(8× RS)  from driver datasheet
+  vref = current * (8 * I_SENSE_RESISTOR);  
+ 
+  // vref goes through a resistor dividor that cuts the voltage in half
+  vref = (vref /2.5) * 1023 / 2;
+  
+  STEPPER_VREF_OCR = (int)vref;
+	
+	
 }
 
 // This is a software reset using the watchdog timer

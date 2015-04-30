@@ -99,7 +99,10 @@
 	#define STEPPER_VREF_DDR     DDRE
   #define STEPPER_VREF_PORT    PORTE
   #define STEPPER_VREF_BIT     3   // E3 is Timer 3
-	#define STEPPER_VREF_OCR     OCR3A 
+	#define STEPPER_VREF_OCR     OCR3A
+	#define I_SENSE_RESISTOR     0.27
+	#define STEPPER_RUN_CURRENT  1.5
+	#define STEPPER_HOMING_CURRENT  0.75
 	
   #define SPINDLE_LED_DDR     DDRH
   #define SPINDLE_LED_PORT    PORTH

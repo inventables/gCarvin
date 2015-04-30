@@ -148,10 +148,4 @@ void spindle_run(uint8_t state, float rpm)
   if (sys.state == STATE_CHECK_MODE) { return; }
   protocol_buffer_synchronize(); // Empty planner buffer to ensure spindle is set when programmed.  
   spindle_set_state(state, rpm);
-	/*
-	#ifdef CARVIN
-			set_led(&spindle_led, LED_FULL_ON,3);
-			set_led(&door_led, LED_FULL_OFF,3);
-	#endif
-	*/
 }

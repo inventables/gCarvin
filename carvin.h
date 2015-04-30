@@ -1,11 +1,8 @@
 /*
   carvin.h - Handles Carvin Controller specific items
-  Part of Grbl v0.9
+  
+  Copyright (c) 2014,2015 Bart Dring / Inventables  
 
-  Copyright (c) 2014 Bart Dring / Inventables  
-
-  GNU General Public License
-  See <http://www.gnu.org/licenses/>.
 */
 
 #ifndef carvin_h
