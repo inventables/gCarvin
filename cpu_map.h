@@ -34,7 +34,7 @@
 #ifdef CPU_MAP_CARVIN // The Inventables Carvin Controller for Carvey
 
   #define CARVIN           // Allows other modules to conditionally compile for CARVIN
-	#define WAIT_FOR_BUTTON  // can be used for test purposes
+	//#define USE_BUTTON_FOR_ON  // can be used for test purposes
   
   // Increase Buffers to make use of extra SRAM
   #define RX_BUFFER_SIZE		256
@@ -101,7 +101,7 @@
   #define STEPPER_VREF_BIT     3   // E3 is Timer 3
 	#define STEPPER_VREF_OCR     OCR3A
 	#define I_SENSE_RESISTOR     0.27
-	#define STEPPER_RUN_CURRENT  1.5
+	#define STEPPER_RUN_CURRENT  1
 	#define STEPPER_HOMING_CURRENT  0.75
 	
   #define SPINDLE_LED_DDR     DDRH

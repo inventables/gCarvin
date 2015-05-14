@@ -25,11 +25,11 @@ void carvin_init()
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
 	STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
 	
+	set_stepper_current(0);
 	
 	
 	
-	
-	#ifdef WAIT_FOR_BUTTON
+	#ifdef USE_BUTTON_FOR_ON
 	
 	long switch_open_count = 0;
 	
@@ -85,7 +85,7 @@ void carvin_init()
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycles 
   DOOR_LED_OCR = 700;
-	set_stepper_current(STEPPER_RUN_CURRENT);
+	
 	
   
   
@@ -115,6 +115,8 @@ void carvin_init()
 	
 	// done initializing Carvin specific things
 	
+	set_stepper_current(STEPPER_RUN_CURRENT);
+	
 }
 
 // Timer3 Interrupt
@@ -135,6 +137,7 @@ ISR(TIMER5_COMPA_vect)
 	if (led_level_change(&spindle_led))
 	  SPINDLE_LED_OCR = spindle_led.current_level;
 	
+	#ifdef USE_BUTTON_FOR_ON
   // if the button is pushed, count up to see if it is held long enough to reset cpu
   if (bit_isfalse(CONTROL_PIN,bit(CYCLE_START_BIT)))
   {
@@ -147,6 +150,7 @@ ISR(TIMER5_COMPA_vect)
   {
 		off_button_counter = 0;  // reset the count
   }
+	#endif
 	
 }
 
