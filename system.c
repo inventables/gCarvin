@@ -40,9 +40,9 @@ void system_init()
 // directly from the incoming serial data stream.
 ISR(CONTROL_INT_vect) 
 {
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  #ifndef INVERT_CONTROL_PIN
-    pin ^= CONTROL_MASK;
+  uint8_t pin = (CONTROL_PIN & CONTROL_MASK); 
+  #ifdef INVERT_CONTROL_MASK
+		pin ^= INVERT_CONTROL_MASK;   // Carvin Change
   #endif
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
@@ -52,12 +52,12 @@ ISR(CONTROL_INT_vect)
       bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
       } else if (bit_istrue(pin,bit(FEED_HOLD_BIT))) {
-        bit_true(sys.rt_exec_state, EXEC_FEED_HOLD); 
+        bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);      // Carvin Change
     #else
-      } else if (bit_istrue(pin,bit(SAFETY_DOOR_BIT))) {
+      } else if (bit_istrue(pin,bit(SAFETY_DOOR_BIT))) {    // CARVin Change
         bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);
     #endif
-    } 
+    }
   }
 }
 
@@ -66,11 +66,16 @@ ISR(CONTROL_INT_vect)
 uint8_t system_check_safety_door_ajar()
 {
   #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-    #ifdef INVERT_CONTROL_PIN
-      return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-    #else
+    // Carvin Change
+		
+		// TODO need to put an #ifdef INVERT_CONTROL_MASK
+		// TODO There is probably a way to do this in one line
+		
+		if (bit_istrue(INVERT_CONTROL_MASK,(bit(SAFETY_DOOR_BIT))))  
       return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-    #endif
+    else
+		  return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
+		
   #else
     return(false); // Input pin not enabled, so just return that it's closed.
   #endif
