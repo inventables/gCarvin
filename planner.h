@@ -43,8 +43,7 @@ typedef struct {
   uint8_t direction_bits;    // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
   uint32_t steps[N_AXIS];    // Step count along each axis
   uint32_t step_event_count; // The maximum step axis count and number of steps required to complete this block.
-
-  float steps_remaining; 
+  float steps_remaining; 	 // Number of full and partial steps remaining to execute.
 
   // Fields used by the motion planner to manage acceleration
   float entry_speed_sqr;         // The current planned entry speed at block junction in (mm/min)^2
@@ -69,15 +68,9 @@ void plan_reset();
 // in millimeters. Feed rate specifies the speed of the motion. If feed rate is inverted, the feed
 // rate is taken to mean "frequency" and would complete the operation in 1/feed_rate minutes.
 #ifdef USE_LINE_NUMBERS
-  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number);
+  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_parking_motion, int32_t line_number);
 #else
-  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate);
-#endif
-
-#ifdef USE_LINE_NUMBERS   
-  uint8_t plan_parking_line(float *target, float feed_rate, uint8_t invert_feed_rate, int32_t line_number);
-#else
-  uint8_t plan_parking_line(float *target, float feed_rate, uint8_t invert_feed_rate);
+  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_parking_motion);
 #endif
 
 // Called when the current block is no longer needed. Discards the block and makes the memory

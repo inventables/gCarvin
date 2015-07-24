@@ -45,32 +45,29 @@ void spindle_init()
 
 void spindle_stop()
 {
-
-	
-	
   // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
   #ifdef VARIABLE_SPINDLE
     TCCRA_REGISTER &= ~(1<<COMB_BIT); // Disable PWM. Output voltage is zero.
     #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN)
       #ifdef INVERT_SPINDLE_ENABLE_PIN
-		    SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
-			#else
-				SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
-			#endif
+		SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+	  #else
+		SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+	  #endif
     #endif
   #else
     #ifdef INVERT_SPINDLE_ENABLE_PIN
-	    SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
-	  #else
-	    SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
-	  #endif
+	  SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+	#else
+	  SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+	#endif
   #endif  
-	
-	#ifdef CARVIN
+  
+  #ifdef CARVIN
 			set_led(&spindle_led, LED_FULL_OFF,3);
 			set_led(&door_led, LED_FULL_ON,3);
-	#endif
-	
+  #endif
+  
 }
 
 
@@ -79,7 +76,6 @@ void spindle_set_state(uint8_t state, float rpm)
   // Halt or set spindle direction and rpm. 
   if (state == SPINDLE_DISABLE) {
 
-	  
     spindle_stop();
 
   } else {
@@ -133,11 +129,12 @@ void spindle_set_state(uint8_t state, float rpm)
 		SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
 	  #endif
     #endif
-		
-		#ifdef CARVIN
+	
+	#ifdef CARVIN
 			set_led(&spindle_led, LED_FULL_ON,3);
 			set_led(&door_led, LED_FULL_OFF,3);
-	  #endif
+     #endif
+
 
   }
 }

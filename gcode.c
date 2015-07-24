@@ -259,6 +259,11 @@ uint8_t gc_execute_line(char *line)
             word_bit = MODAL_GROUP_G12;
             gc_block.modal.coord_select = int_value-54; // Shift to array indexing.
             break;
+          case 61:
+            word_bit = MODAL_GROUP_G13;
+            if (mantissa != 0) { FAIL(STATUS_GCODE_UNSUPPORTED_COMMAND); } // [G61.1 not supported]
+            // gc_block.modal.control = CONTROL_MODE_EXACT_PATH; // G61
+            break;
           default: FAIL(STATUS_GCODE_UNSUPPORTED_COMMAND); // [Unsupported G command]
         }      
         if (mantissa > 0) { FAIL(STATUS_GCODE_COMMAND_VALUE_NOT_INTEGER); } // [Unsupported or invalid Gxx.x command]
@@ -519,8 +524,8 @@ uint8_t gc_execute_line(char *line)
     }
   }
   
-  // [16. Set path control mode ]: NOT SUPPORTED.
-  // [17. Set distance mode ]: N/A. G90.1 and G91.1 NOT SUPPORTED.
+  // [16. Set path control mode ]: N/A. Only G61. G61.1 and G64 NOT SUPPORTED.
+  // [17. Set distance mode ]: N/A. Only G91.1. G90.1 NOT SUPPORTED.
   // [18. Set retract mode ]: NOT SUPPORTED.
   
   // [19. Remaining non-modal actions ]: Check go to predefined position, set G10, or set axis offsets.
@@ -900,7 +905,8 @@ uint8_t gc_execute_line(char *line)
     memcpy(gc_state.coord_system,coordinate_data,sizeof(coordinate_data));
   }
   
-  // [16. Set path control mode ]: NOT SUPPORTED
+  // [16. Set path control mode ]: G61.1/G64 NOT SUPPORTED
+  // gc_state.modal.control = gc_block.modal.control; // NOTE: Always default.
   
   // [17. Set distance mode ]:
   gc_state.modal.distance = gc_block.modal.distance;
@@ -1028,18 +1034,41 @@ uint8_t gc_execute_line(char *line)
   // refill and can only be resumed by the cycle start run-time command.
   gc_state.modal.program_flow = gc_block.modal.program_flow;
   if (gc_state.modal.program_flow) { 
-    protocol_buffer_synchronize(); // Finish all remaining buffered motions. Program paused when complete.
-
-    sys.suspend = true;
-    protocol_execute_realtime(); // Suspend execution. For both program pause or program end.
-  
-    // If complete, reset to reload defaults (G92.2,G54,G17,G90,G94,M48,G40,M5,M9). Otherwise,
-    // re-enable program flow after pause complete, where cycle start will resume the program.
-    if (gc_state.modal.program_flow == PROGRAM_FLOW_COMPLETED) { mc_reset(); }
-    else { gc_state.modal.program_flow = PROGRAM_FLOW_RUNNING; } // Resume from program pause.
+	protocol_buffer_synchronize(); // Sync and finish all remaining buffered motions before moving on.
+	if (gc_state.modal.program_flow == PROGRAM_FLOW_PAUSED) {
+	  if (sys.state != STATE_CHECK_MODE) {
+		bit_true_atomic(sys.rt_exec_state, EXEC_FEED_HOLD); // Use feed hold for program pause.
+		protocol_execute_realtime(); // Execute suspend.
+	  }
+	} else { // == PROGRAM_FLOW_COMPLETED
+	  // Upon program complete, only a subset of g-codes reset to certain defaults, according to 
+	  // LinuxCNC's program end descriptions and testing. Only modal groups [G-code 1,2,3,5,7,12]
+	  // and [M-code 7,8,9] reset to [G1,G17,G90,G94,G40,G54,M5,M9,M48]. The remaining modal groups
+	  // [G-code 4,6,8,10,13,14,15] and [M-code 4,5,6] and the modal words [F,S,T,H] do not reset.
+	  gc_state.modal.motion = MOTION_MODE_LINEAR;
+	  gc_state.modal.plane_select = PLANE_SELECT_XY;
+	  gc_state.modal.distance = DISTANCE_MODE_ABSOLUTE;
+	  gc_state.modal.feed_rate = FEED_RATE_MODE_UNITS_PER_MIN;
+	  // gc_state.modal.cutter_comp = CUTTER_COMP_DISABLE; // Not supported.
+	  gc_state.modal.coord_select = 0; // G54
+	  gc_state.modal.spindle = SPINDLE_DISABLE;
+	  gc_state.modal.coolant = COOLANT_DISABLE;
+	  // gc_state.modal.override = OVERRIDE_DISABLE; // Not supported.
+	  
+	  // Execute coordinate change and spindle/coolant stop.
+	  if (sys.state != STATE_CHECK_MODE) {
+		if (!(settings_read_coord_data(gc_state.modal.coord_select,coordinate_data))) { FAIL(STATUS_SETTING_READ_FAIL); } 
+		memcpy(gc_state.coord_system,coordinate_data,sizeof(coordinate_data));
+		spindle_stop();
+		coolant_stop();		
+	  }
+	  
+	  report_feedback_message(MESSAGE_PROGRAM_END);
+	}
+    gc_state.modal.program_flow = PROGRAM_FLOW_RUNNING; // Reset program flow.
   }
     
-  // TODO: % to denote start of program. Sets auto cycle start?
+  // TODO: % to denote start of program.
   return(STATUS_OK);
 }
         
@@ -1066,5 +1095,5 @@ uint8_t gc_execute_line(char *line)
    group 8 = {*M7} enable mist coolant (* Compile-option)
    group 9 = {M48, M49} enable/disable feed and speed override switches
    group 10 = {G98, G99} return mode canned cycles
-   group 13 = {G61, G61.1, G64} path control mode
+   group 13 = {G61.1, G64} path control mode (G61 is supported)
 */

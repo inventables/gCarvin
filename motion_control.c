@@ -69,9 +69,9 @@
   // Plan and queue motion into planner buffer
 //   uint8_t plan_status; // Not used in normal operation.
   #ifdef USE_LINE_NUMBERS
-    plan_buffer_line(target, feed_rate, invert_feed_rate, line_number);
+    plan_buffer_line(target, feed_rate, invert_feed_rate, false, line_number);
   #else
-    plan_buffer_line(target, feed_rate, invert_feed_rate);
+    plan_buffer_line(target, feed_rate, invert_feed_rate, false);
   #endif
 }
 
@@ -226,9 +226,7 @@ void mc_homing_cycle()
   // with machines with limits wired on both ends of travel to one limit pin.
   // TODO: Move the pin-specific LIMIT_PIN call to limits.c as a function.
   #ifdef LIMITS_TWO_SWITCHES_ON_AXES  
-    uint8_t limit_state = (LIMIT_PIN & LIMIT_MASK);
-    if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { limit_state ^= LIMIT_MASK; }
-    if (limit_state) { 
+    if (limits_get_state()) { 
       mc_reset(); // Issue system reset and ensure spindle and coolant are shutdown.
       bit_true_atomic(sys.rt_exec_alarm, (EXEC_ALARM_HARD_LIMIT|EXEC_CRITICAL_EVENT));
       return;
@@ -257,7 +255,7 @@ void mc_homing_cycle()
 
   // Gcode parser position was circumvented by the limits_go_home() routine, so sync position now.
   gc_sync_position();
-  
+
   // If hard limits feature enabled, re-enable hard limits pin change register after homing cycle.
   limits_init();
 }
@@ -341,7 +339,7 @@ void mc_homing_cycle()
 
 void mc_parking_motion(float *parking_target, float feed_rate) 
 {
-  uint8_t plan_status = plan_parking_line(parking_target, feed_rate, false);
+  uint8_t plan_status = plan_buffer_line(parking_target, feed_rate, false, true);
   if (plan_status) {
 	bit_true(sys.suspend, SUSPEND_EXECUTE_PARK); 
 	bit_false(sys.suspend,SUSPEND_NO_MOTION);

@@ -47,10 +47,10 @@
 // g-code programs, maybe selected for interface programs.
 // NOTE: If changed, manually update help message in report.c.
 #define CMD_STATUS_REPORT '?'
-#define CMD_FEED_HOLD '@'
+#define CMD_FEED_HOLD '!'
 #define CMD_CYCLE_START '~'
 #define CMD_RESET 0x18 // ctrl-x.
-#define CMD_SAFETY_DOOR '!'  // Carvin This was swapped with for testing with UGS button
+#define CMD_SAFETY_DOOR '@'
 
 // If homing is enabled, homing init lock sets Grbl into an alarm state upon power up. This forces
 // the user to perform the homing cycle (or override the locks) before doing anything else. This is
@@ -72,9 +72,9 @@
 // on separate pin, but homed in one cycle. Also, it should be noted that the function of hard limits 
 // will not be affected by pin sharing.
 // NOTE: Defaults are set for a traditional 3-axis CNC machine. Z-axis first to clear, followed by X & Y.
-#define HOMING_CYCLE_0 (1<<Z_AXIS)                // REQUIRED: First move Z to clear workspace.
-#define HOMING_CYCLE_1 (1<<X_AXIS)                // OPTIONAL: Then move X,Y at the same time.
-#define HOMING_CYCLE_2 (1<<Y_AXIS)                // OPTIONAL: Uncomment and add axes mask to enable
+#define HOMING_CYCLE_0 (1<<Z_AXIS)                // REQUIRED: First move Z
+#define HOMING_CYCLE_1 (1<<X_AXIS) 
+#define HOMING_CYCLE_2 (1<<Y_AXIS) 
 
 // Number of homing cycles performed after when the machine initially jogs to limit switches.
 // This help in preventing overshoot and should improve repeatability. This value should be one or 
@@ -154,8 +154,7 @@
 // Inverts pin logic of the control command pins. This essentially means when this option is enabled
 // you can use normally-closed switches, rather than the default normally-open switches.
 // NOTE: Will eventually be added to Grbl settings in v1.0.
-// #define INVERT_CONTROL_PIN // Default disabled. Uncomment to enable.   !!! Carvin uses a mask
-	
+// #define INVERT_CONTROL_PIN // Default disabled. Uncomment to enable.
 
 // Inverts the spindle enable pin from low-disabled/high-enabled to low-enabled/high-disabled. Useful
 // for some pre-built electronic boards.
@@ -163,13 +162,6 @@
 // spindle enable are combined to one pin. If you need both this option and spindle speed PWM, 
 // uncomment the config option USE_SPINDLE_DIR_AS_ENABLE_PIN below.
 // #define INVERT_SPINDLE_ENABLE_PIN // Default disabled. Uncomment to enable.
-
-// Enable limit pin states feedback in status reports. The data is presented as 0 (low) or 1(high), 
-// where the order is XYZ. For example, if the Y- and Z-limit pins are active, Grbl will include the 
-// following string in the status report "Lim:011". This is generally useful for setting up a new
-// CNC machine, but we do not recommend keeping this option enabled, as it will consume CPU resources
-// with little to no benefit during normal operation and it may not be supported by most GUIs.
-// #define REPORT_LIMIT_PIN_STATE // Default disabled. Uncomment to enable.
 
 // Enable control pin states feedback in status reports. The data is presented as simple binary of
 // the control pin port (0 (low) or 1(high)), masked to show only the input pins. Non-control pins on the 
@@ -250,7 +242,7 @@
 // equally divided voltage bins between the maximum and minimum spindle speeds. So for a 5V pin, 1000
 // max rpm, and 250 min rpm, the spindle output voltage would be set for the following "S" commands: 
 // "S1000" @ 5V, "S250" @ 0.02V, and "S625" @ 2.5V (mid-range). The pin outputs 0V when disabled.
-#define SPINDLE_MAX_RPM 1000.0 // Max spindle RPM. This value is equal to 100% duty cycle on the PWM.
+#define SPINDLE_MAX_RPM 12000.0 // Max spindle RPM. This value is equal to 100% duty cycle on the PWM.
 #define SPINDLE_MIN_RPM 0.0    // Min spindle RPM. This value is equal to (1/256) duty cycle on the PWM.
 
 // Used by variable spindle output only. This forces the PWM output to a minimum duty cycle when enabled.
@@ -394,8 +386,8 @@
 // uses the homing pull-off distance setting times the LOCATE_SCALAR to pull-off and re-engage
 // the limit switch.
 // NOTE: Both of these values must be greater than 1.0 to ensure proper function.
- #define HOMING_AXIS_SEARCH_SCALAR  1.1 // Uncomment to override defaults in limits.c.
- #define HOMING_AXIS_LOCATE_SCALAR  4.0 // Uncomment to override defaults in limits.c.
+// #define HOMING_AXIS_SEARCH_SCALAR  1.5 // Uncomment to override defaults in limits.c.
+// #define HOMING_AXIS_LOCATE_SCALAR  10.0 // Uncomment to override defaults in limits.c.
 
 
 // Enables and configures parking motion methods upon a safety door state. Primarily for OEMs

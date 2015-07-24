@@ -325,66 +325,64 @@ void protocol_exec_rt_system()
       bit_false_atomic(sys.rt_exec_state,(EXEC_MOTION_CANCEL | EXEC_FEED_HOLD | EXEC_SAFETY_DOOR));      
     }
     
-    if (rt_exec & (EXEC_CYCLE_START | EXEC_CYCLE_STOP)) {
-      // Execute a cycle start by starting the stepper interrupt to begin executing the blocks in queue.
-      if (rt_exec & EXEC_CYCLE_START) {
-        // Block if called at same time as the hold commands: feed hold, motion cancel, and safety door.
-        // Ensures auto-cycle-start doesn't resume a hold without an explicit user-input.
-        if (!(rt_exec & (EXEC_FEED_HOLD | EXEC_MOTION_CANCEL | EXEC_SAFETY_DOOR))) { 
-          // Cycle start only when IDLE or when a hold is complete and ready to resume.
-          // NOTE: SAFETY_DOOR is implicitly blocked. It reverts to HOLD when the door is closed.
-          if ((sys.state == STATE_IDLE) || ((sys.state & (STATE_HOLD | STATE_MOTION_CANCEL)) && (sys.suspend & SUSPEND_HOLD_COMPLETE))) {
+	// Execute a cycle start by starting the stepper interrupt to begin executing the blocks in queue.
+	if (rt_exec & EXEC_CYCLE_START) {
+	  // Block if called at same time as the hold commands: feed hold, motion cancel, and safety door.
+	  // Ensures auto-cycle-start doesn't resume a hold without an explicit user-input.
+	  if (!(rt_exec & (EXEC_FEED_HOLD | EXEC_MOTION_CANCEL | EXEC_SAFETY_DOOR))) { 
+		// Cycle start only when IDLE or when a hold is complete and ready to resume.
+		// NOTE: SAFETY_DOOR is implicitly blocked. It reverts to HOLD when the door is closed.
+		if ((sys.state == STATE_IDLE) || ((sys.state & (STATE_HOLD | STATE_MOTION_CANCEL)) && (sys.suspend & SUSPEND_HOLD_COMPLETE))) {
 //             if ((sys.suspend & (SUSPEND_SAFETY_DOOR_AJAR | SUSPEND_RETRACT_COMPLETE | SUSPEND_RESTORE_COMPLETE) 
 //                   == (SUSPEND_SAFETY_DOOR_AJAR | SUSPEND_RETRACT_COMPLETE)) {
-            if (sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) {
-              if (sys.suspend & SUSPEND_RETRACT_COMPLETE) {
-                if bit_isfalse(sys.suspend,SUSPEND_RESTORE_COMPLETE) {
-				  // Flag to re-energize powered components and restore original position, if disabled by SAFETY_DOOR.
-				  // NOTE: For a safety door to resume, the switch must be closed, as indicated by HOLD state, and
-				  // the retraction execution is complete, which implies the initial feed hold is not active. To 
-				  // restore normal operation, the restore procedures must be initiated by the following flag. Once,
-				  // they are complete, it will call CYCLE_START automatically to resume and exit the suspend.
-				  sys.suspend |= SUSPEND_EXECUTE_PARK;
-				} else {
-				  bit_false(sys.suspend,SUSPEND_SAFETY_DOOR_AJAR);
-				}
+		  if (sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) {
+			if (sys.suspend & SUSPEND_RETRACT_COMPLETE) {
+			  if bit_isfalse(sys.suspend,SUSPEND_RESTORE_COMPLETE) {
+				// Flag to re-energize powered components and restore original position, if disabled by SAFETY_DOOR.
+				// NOTE: For a safety door to resume, the switch must be closed, as indicated by HOLD state, and
+				// the retraction execution is complete, which implies the initial feed hold is not active. To 
+				// restore normal operation, the restore procedures must be initiated by the following flag. Once,
+				// they are complete, it will call CYCLE_START automatically to resume and exit the suspend.
+				sys.suspend |= SUSPEND_EXECUTE_PARK;
+			  } else {
+				bit_false(sys.suspend,SUSPEND_SAFETY_DOOR_AJAR);
 			  }
-            } 
-            if (!(sys.suspend & SUSPEND_SAFETY_DOOR_AJAR)) {          
-              // Start cycle only if queued motions exist in planner buffer and the motion is not canceled.
-              if (plan_get_current_block() && bit_isfalse(sys.suspend,SUSPEND_MOTION_CANCEL)) {
-				sys.suspend = SUSPEND_DISABLE; // Break suspend state.
-                sys.state = STATE_CYCLE;
-                st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
-                st_wake_up();
-              } else { // Otherwise, do nothing. Set and resume IDLE state.
-				sys.suspend = SUSPEND_DISABLE; // Break suspend state.
-                sys.state = STATE_IDLE;
-              }
-            }
-          }
-        }    
-      }
-  
+			}
+		  } 
+		  if (!(sys.suspend & SUSPEND_SAFETY_DOOR_AJAR)) {          
+			// Start cycle only if queued motions exist in planner buffer and the motion is not canceled.
+			if (plan_get_current_block() && bit_isfalse(sys.suspend,SUSPEND_MOTION_CANCEL)) {
+			  sys.suspend = SUSPEND_DISABLE; // Break suspend state.
+			  sys.state = STATE_CYCLE;
+			  st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
+			  st_wake_up();
+			} else { // Otherwise, do nothing. Set and resume IDLE state.
+			  sys.suspend = SUSPEND_DISABLE; // Break suspend state.
+			  sys.state = STATE_IDLE;
+			}
+		  }
+		}
+	  }    
+	  bit_false_atomic(sys.rt_exec_state,EXEC_CYCLE_START);
+	}
+    
+    if (rt_exec & EXEC_CYCLE_STOP) {
       // Reinitializes the cycle plan and stepper system after a feed hold for a resume. Called by 
       // realtime command execution in the main program, ensuring that the planner re-plans safely.
       // NOTE: Bresenham algorithm variables are still maintained through both the planner and stepper
       // cycle reinitializations. The stepper path should continue exactly as if nothing has happened.   
       // NOTE: EXEC_CYCLE_STOP is set by the stepper subsystem when a cycle or feed hold completes.
-      if (rt_exec & EXEC_CYCLE_STOP) {
-        if (sys.state & (STATE_HOLD | STATE_SAFETY_DOOR)) {
-		  // Hold complete. Set to indicate ready to resume.  Remain in HOLD or DOOR states until user
-		  // has issued a resume command or reset.
-		  if (sys.suspend & SUSPEND_EXECUTE_HOLD) { sys.suspend |= SUSPEND_HOLD_COMPLETE; } 
-		  bit_false(sys.suspend,(SUSPEND_EXECUTE_HOLD | SUSPEND_EXECUTE_PARK));
+	  if (sys.state & (STATE_HOLD | STATE_SAFETY_DOOR)) {
+		// Hold complete. Set to indicate ready to resume.  Remain in HOLD or DOOR states until user
+		// has issued a resume command or reset.
+		if (sys.suspend & SUSPEND_EXECUTE_HOLD) { sys.suspend |= SUSPEND_HOLD_COMPLETE; } 
+		bit_false(sys.suspend,(SUSPEND_EXECUTE_HOLD | SUSPEND_EXECUTE_PARK));
 
-        } else { // Motion is complete. Includes CYCLE, HOMING, and MOTION_CANCEL states.
-          sys.suspend = SUSPEND_DISABLE;
-          sys.state = STATE_IDLE;
-        }
-      }
-  
-      bit_false_atomic(sys.rt_exec_state,(EXEC_CYCLE_START | EXEC_CYCLE_STOP));
+	  } else { // Motion is complete. Includes CYCLE, HOMING, and MOTION_CANCEL states.
+		sys.suspend = SUSPEND_DISABLE;
+		sys.state = STATE_IDLE;
+	  }  
+      bit_false_atomic(sys.rt_exec_state,EXEC_CYCLE_STOP);
     }
   }
   

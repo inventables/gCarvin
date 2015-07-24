@@ -40,9 +40,9 @@ void system_init()
 // directly from the incoming serial data stream.
 ISR(CONTROL_INT_vect) 
 {
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK); 
-  #ifdef INVERT_CONTROL_MASK
-		pin ^= INVERT_CONTROL_MASK;   // Carvin Change
+  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
+  #ifndef INVERT_CONTROL_PIN
+    pin ^= CONTROL_MASK;
   #endif
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
@@ -52,12 +52,12 @@ ISR(CONTROL_INT_vect)
       bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
       } else if (bit_istrue(pin,bit(FEED_HOLD_BIT))) {
-        bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);      // Carvin Change
+        bit_true(sys.rt_exec_state, EXEC_FEED_HOLD); 
     #else
-      } else if (bit_istrue(pin,bit(SAFETY_DOOR_BIT))) {    // CARVin Change
+      } else if (bit_istrue(pin,bit(SAFETY_DOOR_BIT))) {
         bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);
     #endif
-    }
+    } 
   }
 }
 
@@ -66,16 +66,11 @@ ISR(CONTROL_INT_vect)
 uint8_t system_check_safety_door_ajar()
 {
   #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-    // Carvin Change
-		
-		// TODO need to put an #ifdef INVERT_CONTROL_MASK
-		// TODO There is probably a way to do this in one line
-		
-		if (bit_istrue(INVERT_CONTROL_MASK,(bit(SAFETY_DOOR_BIT))))  
+    #ifdef INVERT_CONTROL_PIN
+      return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
+    #else
       return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-    else
-		  return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-		
+    #endif
   #else
     return(false); // Input pin not enabled, so just return that it's closed.
   #endif
@@ -205,7 +200,21 @@ uint8_t system_execute_line(char *line)
             } while (line[char_counter++] != 0);
             settings_store_build_info(line);
           }
-          break;                 
+          break; 
+        case 'R' : // Restore defaults [IDLE/ALARM]
+          if (line[++char_counter] != 'S') { return(STATUS_INVALID_STATEMENT); }
+          if (line[++char_counter] != 'T') { return(STATUS_INVALID_STATEMENT); }
+          if (line[++char_counter] != '=') { return(STATUS_INVALID_STATEMENT); }
+          if (line[char_counter+2] != 0) { return(STATUS_INVALID_STATEMENT); }                        
+          switch (line[++char_counter]) {
+            case '$': settings_restore(SETTINGS_RESTORE_DEFAULTS); break;
+            case '#': settings_restore(SETTINGS_RESTORE_PARAMETERS); break;
+            case '*': settings_restore(SETTINGS_RESTORE_ALL); break;
+            default: return(STATUS_INVALID_STATEMENT);
+          }
+          report_feedback_message(MESSAGE_RESTORE_DEFAULTS);
+          mc_reset(); // Force reset to ensure settings are initialized correctly.
+          break;
         case 'N' : // Startup lines. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) { // Print startup lines
             for (helper_var=0; helper_var < N_STARTUP_LINE; helper_var++) {
@@ -257,8 +266,10 @@ float system_convert_axis_steps_to_mpos(int32_t *steps, uint8_t idx)
   #ifdef COREXY
     if (idx==A_MOTOR) { 
       pos = 0.5*((steps[A_MOTOR] + steps[B_MOTOR])/settings.steps_per_mm[idx]);
-    } else { // (idx==B_MOTOR)
+    } else if (idx==B_MOTOR) {
       pos = 0.5*((steps[A_MOTOR] - steps[B_MOTOR])/settings.steps_per_mm[idx]);
+    } else {
+      pos = steps[idx]/settings.steps_per_mm[idx];
     }
   #else
     pos = steps[idx]/settings.steps_per_mm[idx];

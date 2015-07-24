@@ -29,17 +29,13 @@ system_t sys;
 int main(void)
 {
   // Initialize system upon power-up.
-	
-	system_init();   // Configure pinout pins and pin-change interrupt
-	settings_init(); // Load Grbl settings from EEPROM
-  
-	#ifdef CARVIN
+  serial_init();   // Setup serial baud rate and interrupts
+  settings_init(); // Load Grbl settings from EEPROM
+#ifdef CARVIN
 	carvin_init();  // setup carvin I/O and wait for initial button push
-  #endif
-	
-	serial_init();   // Setup serial baud rate and interrupts
+#endif
   stepper_init();  // Configure stepper pins and interrupt timers
-  
+  system_init();   // Configure pinout pins and pin-change interrupt
   
   memset(&sys, 0, sizeof(sys));  // Clear all system variables
   sys.abort = true;   // Set abort to complete initialization

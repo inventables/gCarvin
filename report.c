@@ -136,6 +136,10 @@ void report_feedback_message(uint8_t message_code)
     printPgmString(PSTR("Disabled")); break; 
     case MESSAGE_SAFETY_DOOR_AJAR:
     printPgmString(PSTR("Check Door")); break;
+    case MESSAGE_PROGRAM_END:
+    printPgmString(PSTR("Pgm End")); break;
+    case MESSAGE_RESTORE_DEFAULTS:
+    printPgmString(PSTR("Restoring defaults")); break;
   }
   printPgmString(PSTR("]\r\n"));
 }
@@ -144,7 +148,7 @@ void report_feedback_message(uint8_t message_code)
 // Welcome message
 void report_init_message()
 {
-  printPgmString(PSTR("\r\nGrbl " GRBL_VERSION " ['$' for help]\r\n"));
+  printPgmString(PSTR("\r\nCarvin " GRBL_VERSION " ['$' for help]\r\n"));
 }
 
 // Grbl help message
@@ -492,13 +496,10 @@ void report_realtime_status()
     printFloat_RateValue(st_get_realtime_rate());
   #endif    
   
-  #ifdef REPORT_LIMIT_PIN_STATE
+  if (bit_istrue(settings.status_report_mask,BITFLAG_RT_STATUS_LIMIT_PINS)) {
     printPgmString(PSTR(",Lim:"));
-    for (idx=0; idx<N_AXIS; idx++) {
-      if (LIMIT_PIN & get_limit_pin_mask(idx)) { printPgmString(PSTR("1")); }
-      else { printPgmString(PSTR("0")); }
-    }
-  #endif
+    print_unsigned_int8(limits_get_state(),2,N_AXIS);
+  }
   
   #ifdef REPORT_CONTROL_PIN_STATE 
     printPgmString(PSTR(",Ctl:"));
