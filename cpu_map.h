@@ -152,8 +152,11 @@
   #define CONTROL_INT       PCIE2  // Pin change interrupt enable pin
   #define CONTROL_INT_vect  PCINT2_vect
   #define CONTROL_PCMSK     PCMSK2 // Pin change interrupt register
-  #define CONTROL_MASK      ((1<<FEED_HOLD_BIT)|(1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))
-	#define INVERT_CONTROL_MASK ((1<<CYCLE_START_BIT) )   // New Carvin Change
+  //#define CONTROL_MASK      ((1<<FEED_HOLD_BIT)|(1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))
+  //#define INVERT_CONTROL_MASK ((1<<CYCLE_START_BIT) )   // New Carvin Change
+	
+  #define CONTROL_MASK      	((1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))
+  #define INVERT_CONTROL_MASK 	(1<<SAFETY_DOOR_BIT)
 	
   // Define probe switch input pin.  (Probe is smart clamp in Carvin)
   #define PROBE_DDR       DDRK

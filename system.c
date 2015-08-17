@@ -66,8 +66,14 @@ ISR(CONTROL_INT_vect)
 uint8_t system_check_safety_door_ajar()
 {
   #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-    #ifdef INVERT_CONTROL_PIN
-      return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
+    #ifdef INVERT_CONTROL_MASK
+	  if (INVERT_CONTROL_MASK && (1<<SAFETY_DOOR_BIT))
+	  {  
+		return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
+	  }
+	  else
+		return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));	    
+	
     #else
       return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
     #endif
