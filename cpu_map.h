@@ -141,22 +141,23 @@
   #define COOLANT_FLOOD_BIT   5
   
 	// control i/o
-	#define CONTROL_DDR       DDRK
+  #define CONTROL_DDR       DDRK
   #define CONTROL_PIN       PINK
   #define CONTROL_PORT      PORTK
   #define RESET_BIT         0  // Not Used
-  #define FEED_HOLD_BIT     1  // Cover Door
+  #define FEED_HOLD_BIT     1  // Cover Door   Not Inverted 
   #define CYCLE_START_BIT   2  // Front Button
-  #define SAFETY_DOOR_BIT   1  // Cover Door
-	#define CLAMP_CHECK_BIT   4   // clamp check
+  #define SAFETY_DOOR_BIT   1  // Cover Door   Inverted
+  #define CLAMP_CHECK_BIT   4   // clamp check
   #define CONTROL_INT       PCIE2  // Pin change interrupt enable pin
   #define CONTROL_INT_vect  PCINT2_vect
   #define CONTROL_PCMSK     PCMSK2 // Pin change interrupt register
-  //#define CONTROL_MASK      ((1<<FEED_HOLD_BIT)|(1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))
-  //#define INVERT_CONTROL_MASK ((1<<CYCLE_START_BIT) )   // New Carvin Change
-	
-  #define CONTROL_MASK      	((1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))
-  #define INVERT_CONTROL_MASK 	(1<<SAFETY_DOOR_BIT)
+  
+  
+  // all these switches use pull ups the "normal" is high or inverted    
+  #define CONTROL_MASK      	((1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))  // the mask of all switches
+  #define INVERT_CONTROL_MASK 	(1<<CYCLE_START_BIT)  // the mask of ones that are inverted.
+  
 	
   // Define probe switch input pin.  (Probe is smart clamp in Carvin)
   #define PROBE_DDR       DDRK

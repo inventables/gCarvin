@@ -41,9 +41,12 @@ void system_init()
 ISR(CONTROL_INT_vect) 
 {
   uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  #ifndef INVERT_CONTROL_PIN
-    pin ^= CONTROL_MASK;
+  
+  // if some are inverted they need flipped
+  #ifdef INVERT_CONTROL_MASK
+    pin ^= INVERT_CONTROL_MASK;
   #endif
+  
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
     if (bit_istrue(pin,bit(RESET_BIT))) {
@@ -72,8 +75,7 @@ uint8_t system_check_safety_door_ajar()
 		return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
 	  }
 	  else
-		return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));	    
-	
+		return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
     #else
       return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
     #endif
