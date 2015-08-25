@@ -35,12 +35,12 @@
 
   #define CARVIN           // Allows other modules to conditionally compile for CARVIN
 	//#define USE_BUTTON_FOR_ON  // can be used for test purposes
-  
   // Increase Buffers to make use of extra SRAM
-  #define RX_BUFFER_SIZE		256
-  #define TX_BUFFER_SIZE		128
-  #define BLOCK_BUFFER_SIZE	36
-  #define LINE_BUFFER_SIZE	100
+//#define RX_BUFFER_SIZE		  256
+//#define TX_BUFFER_SIZE		  128
+//#define BLOCK_BUFFER_SIZE	  36
+//#define LINE_BUFFER_SIZE	  100
+//#define SEGMENT_BUFFER_SIZE 10
 
   // Serial port pins
   #define SERIAL_RX USART0_RX_vect
@@ -71,11 +71,12 @@
   #define STEPPERS_DISABLE_BIT   7 
   #define STEPPERS_DISABLE_MASK (1<<STEPPERS_DISABLE_BIT)
   
+  
   //  ========================  Start of PWM Ports ======================= 
   #define BUTTON_LED_DDR      DDRH  // H3 is Timer 4
   #define BUTTON_LED_PORT     PORTH
   #define BUTTON_LED_BIT      3  
-	#define BUTTON_LED_OCR 			OCR4A
+  #define BUTTON_LED_OCR 	  OCR4A
 	/*
 	// Schematic has an error that port it on port E see below 
 	
@@ -92,21 +93,21 @@
 	*/
 	
 	#define DOOR_LED_DDR     DDRE  // name the direction register
-  #define DOOR_LED_PORT    PORTE // name the port register
-  #define DOOR_LED_BIT     4   // what bit on the port is it?   E4 is Timer 3
+    #define DOOR_LED_PORT    PORTE // name the port register
+    #define DOOR_LED_BIT     4   // what bit on the port is it?   E4 is Timer 3
 	#define DOOR_LED_OCR     OCR3B  // temp fix
 	
 	#define STEPPER_VREF_DDR     DDRE
-  #define STEPPER_VREF_PORT    PORTE
-  #define STEPPER_VREF_BIT     3   // E3 is Timer 3
+    #define STEPPER_VREF_PORT    PORTE
+    #define STEPPER_VREF_BIT     3   // E3 is Timer 3
 	#define STEPPER_VREF_OCR     OCR3A
 	#define I_SENSE_RESISTOR     0.27
 	#define STEPPER_RUN_CURRENT  2.2
 	#define STEPPER_HOMING_CURRENT  0.75
 	
-  #define SPINDLE_LED_DDR     DDRH
-  #define SPINDLE_LED_PORT    PORTH
-  #define SPINDLE_LED_BIT     5     //H5 is Timer 4
+    #define SPINDLE_LED_DDR     DDRH
+    #define SPINDLE_LED_PORT    PORTH
+    #define SPINDLE_LED_BIT     5     // H5 is Timer 4
 	#define SPINDLE_LED_OCR     OCR4C
 	
 	//  ========================  End of PWM Ports ======================= 
@@ -145,7 +146,7 @@
   #define CONTROL_PIN       PINK
   #define CONTROL_PORT      PORTK
   #define RESET_BIT         0  // Not Used
-  #define FEED_HOLD_BIT     1  // Cover Door   Not Inverted 
+  #define FEED_HOLD_BIT     1  // Not Used
   #define CYCLE_START_BIT   2  // Front Button
   #define SAFETY_DOOR_BIT   1  // Cover Door   Inverted
   #define CLAMP_CHECK_BIT   4   // clamp check
@@ -170,7 +171,7 @@
 	// this is spindle control stuff
 	#define TCCRA_REGISTER		TCCR2A
 	#define TCCRB_REGISTER		TCCR2B
-	#define OCR_REGISTER		OCR2B
+	#define SPINDLE_MOTOR_OCR		OCR2B
 
 	#define COMB_BIT			COM2B1
 	#define WAVE0_REGISTER		WGM20
@@ -182,6 +183,11 @@
 	#define SPINDLE_PWM_DDR		DDRH
 	#define SPINDLE_PWM_PORT    PORTH
 	#define SPINDLE_PWM_BIT		6
+	
+	// spindle need a soft start to prevent drawing too much current
+	#define SPINDLE_SPINUP_RATE 2  // seconds
+	#define SPINDLE_SPINDOWN_RATE 3  // seconds
+    #define EXTEND_SPINDLE_LED_FADE 2 // seconds - it looks a little better if the cross fade associated with the spindle lasts a little longer
 
 #endif
 

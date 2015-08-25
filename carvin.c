@@ -23,7 +23,7 @@ void carvin_init()
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
-	STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
+  STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
 	
 	set_stepper_current(0);
 	
@@ -106,12 +106,13 @@ void carvin_init()
   
   // setup LEDs
   init_led(&button_led);
-	init_led(&door_led);
-	init_led(&spindle_led);
+  init_led(&door_led);
+  init_led(&spindle_led);
+  init_led(&spindle_motor);
   
   // fade on the button and door LEDs at startup	
   set_led(&button_led, 255,3);
-	set_led(&door_led, 255,3);
+  set_led(&door_led, 255,3);
 	
 	// done initializing Carvin specific things
 	
@@ -136,6 +137,9 @@ ISR(TIMER5_COMPA_vect)
 		
 	if (led_level_change(&spindle_led))
 	  SPINDLE_LED_OCR = spindle_led.current_level;
+  
+    if (led_level_change(&spindle_motor))
+	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
 	
 	#ifdef USE_BUTTON_FOR_ON
   // if the button is pushed, count up to see if it is held long enough to reset cpu

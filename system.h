@@ -61,21 +61,20 @@
 
 // Define system suspend flags. Used in various ways to manage suspend states and procedures.
 #define SUSPEND_DISABLE           0      // Must be zero.
-#define SUSPEND_NO_MOTION         bit(0)
-#define SUSPEND_EXECUTE_HOLD      bit(1)
-#define SUSPEND_EXECUTE_PARK      bit(2)
-#define SUSPEND_HOLD_COMPLETE     bit(3) // Indicates initial feed hold is complete.
-#define SUSPEND_RETRACT_COMPLETE  bit(4)
-#define SUSPEND_RESTORE_COMPLETE  bit(5)
-#define SUSPEND_SAFETY_DOOR_AJAR  bit(6) // Indicates suspend was initiated by a safety door state.
-#define SUSPEND_MOTION_CANCEL     bit(7) // Indicates a canceled resume motion. Currently used by probing routine.
+#define SUSPEND_HOLD_COMPLETE     bit(0) // Indicates initial feed hold is complete.
+#define SUSPEND_RESTART_RETRACT   bit(1) // Flag to indicate a retract from a restore parking motion.
+#define SUSPEND_RETRACT_COMPLETE  bit(2) // (Safety door only) Indicates retraction and de-energizing is complete.
+#define SUSPEND_INITIATE_RESTORE  bit(3) // (Safety door only) Flag to initiate resume procedures from a cycle start.
+#define SUSPEND_RESTORE_COMPLETE  bit(4) // (Safety door only) Indicates ready to resume normal operation.
+#define SUSPEND_SAFETY_DOOR_AJAR  bit(5) // Indicates suspend was initiated by a safety door state.
+#define SUSPEND_MOTION_CANCEL     bit(6) // Indicates a canceled resume motion. Currently used by probing routine.
 
 
-// #define PARKING_DISABLE           0
-// #define PARKING_INITIATE_RETRACT  bit(0) // Toggles when parking motion is active for cycle stop checks.
-// #define PARKING_RETRACT_COMPLETE  bit(1) // (Safety door only) Indicates retraction and de-energizing is complete.
-// #define PARKING_INITIATE_RESTORE  bit(2) // (Safety door only) Flag to initiate resume procedures from a cycle start.
-// #define PARKING_RESTORE_COMPLETE  bit(3) // (Safety door only) Indicates ready to resume normal operation.
+#define STEP_CONTROL_NORMAL_OP              0
+// #define STEP_CONTROL_RECOMPUTE_ACTIVE_BLOCK bit(0)
+#define STEP_CONTROL_END_MOTION             bit(1)
+#define STEP_CONTROL_EXECUTE_HOLD           bit(2)
+#define STEP_CONTROL_EXECUTE_PARK           bit(3)
 
 
 
@@ -84,6 +83,7 @@ typedef struct {
   uint8_t abort;                 // System abort flag. Forces exit back to main loop for reset.
   uint8_t state;                 // Tracks the current state of Grbl.
   uint8_t suspend;               // System suspend bitflag variable that manages holds, cancels, and safety door.
+  uint8_t step_control;
 
   volatile uint8_t rt_exec_state;  // Global realtime executor bitflag variable for state management. See EXEC bitmasks.
   volatile uint8_t rt_exec_alarm;  // Global realtime executor bitflag variable for setting various alarms.

@@ -43,9 +43,9 @@ typedef struct {
   uint8_t direction_bits;    // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
   uint32_t steps[N_AXIS];    // Step count along each axis
   uint32_t step_event_count; // The maximum step axis count and number of steps required to complete this block.
-  float steps_remaining; 	 // Number of full and partial steps remaining to execute.
 
-  // Fields used by the motion planner to manage acceleration
+  // Fields used by the motion planner to manage acceleration. Some of these values may be updated
+  // by the stepper module during execution of special motion cases for replanning purposes.
   float entry_speed_sqr;         // The current planned entry speed at block junction in (mm/min)^2
   float max_entry_speed_sqr;     // Maximum allowable entry speed based on the minimum of junction limit and 
                                  //   neighboring nominal speeds with overrides in (mm/min)^2

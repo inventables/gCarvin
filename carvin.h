@@ -43,5 +43,6 @@ void reset_cpu();   // software full reset of the CPU
 // the LEDs
 struct led_analog button_led;
 struct led_analog door_led;
-struct led_analog spindle_led;  
+struct led_analog spindle_led;
+struct led_analog spindle_motor;
 #endif

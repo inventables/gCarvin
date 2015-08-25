@@ -314,11 +314,11 @@ uint8_t plan_check_full_buffer()
         delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
       }
     #else
-	  target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
-	  block->steps[idx] = labs(target_steps[idx]-position_steps[idx]);
-	  block->step_event_count = max(block->step_event_count, block->steps[idx]);
-	  delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
-	#endif
+      target_steps[idx] = lround(target[idx]*settings.steps_per_mm[idx]);
+      block->steps[idx] = labs(target_steps[idx]-position_steps[idx]);
+      block->step_event_count = max(block->step_event_count, block->steps[idx]);
+      delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
+	  #endif
     unit_vec[idx] = delta_mm; // Store unit vector numerator. Denominator computed later.
         
     // Set direction bits. Bit enabled always means direction is negative.
@@ -328,7 +328,6 @@ uint8_t plan_check_full_buffer()
     block->millimeters += delta_mm*delta_mm;
   }
   block->millimeters = sqrt(block->millimeters); // Complete millimeters calculation with sqrt()
-  block->steps_remaining = (float)block->step_event_count; 
   
   // Bail if this is a zero-length block. Highly unlikely to occur.
   if (block->step_event_count == 0) { return(PLAN_EMPTY_BLOCK); } 
@@ -365,49 +364,49 @@ uint8_t plan_check_full_buffer()
   // TODO: Need to check this method handling zero junction speeds when starting from rest.
   if ((block_buffer_head == block_buffer_tail) || is_parking_motion) {
 
-	// Initialize block entry speed as zero. Assume it will be starting from rest. Planner will correct this later.
-	// If parking motion, the parking block always is assumed to start from rest and end at a complete stop.
-	block->entry_speed_sqr = 0.0;
-	block->max_junction_speed_sqr = 0.0; // Starting from rest. Enforce start from zero velocity.
+    // Initialize block entry speed as zero. Assume it will be starting from rest. Planner will correct this later.
+    // If parking motion, the parking block always is assumed to start from rest and end at a complete stop.
+    block->entry_speed_sqr = 0.0;
+    block->max_junction_speed_sqr = 0.0; // Starting from rest. Enforce start from zero velocity.
 
   } else {
-	/* 
-	   Compute maximum allowable entry speed at junction by centripetal acceleration approximation.
-	   Let a circle be tangent to both previous and current path line segments, where the junction 
-	   deviation is defined as the distance from the junction to the closest edge of the circle, 
-	   colinear with the circle center. The circular segment joining the two paths represents the 
-	   path of centripetal acceleration. Solve for max velocity based on max acceleration about the
-	   radius of the circle, defined indirectly by junction deviation. This may be also viewed as 
-	   path width or max_jerk in the previous Grbl version. This approach does not actually deviate 
-	   from path, but used as a robust way to compute cornering speeds, as it takes into account the
-	   nonlinearities of both the junction angle and junction velocity.
+    /* 
+       Compute maximum allowable entry speed at junction by centripetal acceleration approximation.
+       Let a circle be tangent to both previous and current path line segments, where the junction 
+       deviation is defined as the distance from the junction to the closest edge of the circle, 
+       colinear with the circle center. The circular segment joining the two paths represents the 
+       path of centripetal acceleration. Solve for max velocity based on max acceleration about the
+       radius of the circle, defined indirectly by junction deviation. This may be also viewed as 
+       path width or max_jerk in the previous Grbl version. This approach does not actually deviate 
+       from path, but used as a robust way to compute cornering speeds, as it takes into account the
+       nonlinearities of both the junction angle and junction velocity.
 
-	   NOTE: If the junction deviation value is finite, Grbl executes the motions in an exact path 
-	   mode (G61). If the junction deviation value is zero, Grbl will execute the motion in an exact
-	   stop mode (G61.1) manner. In the future, if continuous mode (G64) is desired, the math here
-	   is exactly the same. Instead of motioning all the way to junction point, the machine will
-	   just follow the arc circle defined here. The Arduino doesn't have the CPU cycles to perform
-	   a continuous mode path, but ARM-based microcontrollers most certainly do. 
+       NOTE: If the junction deviation value is finite, Grbl executes the motions in an exact path 
+       mode (G61). If the junction deviation value is zero, Grbl will execute the motion in an exact
+       stop mode (G61.1) manner. In the future, if continuous mode (G64) is desired, the math here
+       is exactly the same. Instead of motioning all the way to junction point, the machine will
+       just follow the arc circle defined here. The Arduino doesn't have the CPU cycles to perform
+       a continuous mode path, but ARM-based microcontrollers most certainly do. 
    
-	   NOTE: The max junction speed is a fixed value, since machine acceleration limits cannot be
-	   changed dynamically during operation nor can the line move geometry. This must be kept in
-	   memory in the event of a feedrate override changing the nominal speeds of blocks, which can 
-	   change the overall maximum entry speed conditions of all blocks.
-	*/
-	// NOTE: Computed without any expensive trig, sin() or acos(), by trig half angle identity of cos(theta).
-	if (junction_cos_theta > 0.99) {
-	  //  For a 0 degree acute junction, just set minimum junction speed. 
-	  block->max_junction_speed_sqr = MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED;
-	} else {
-	  junction_cos_theta = max(junction_cos_theta,-0.99); // Check for numerical round-off to avoid divide by zero.
-	  float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
+       NOTE: The max junction speed is a fixed value, since machine acceleration limits cannot be
+       changed dynamically during operation nor can the line move geometry. This must be kept in
+       memory in the event of a feedrate override changing the nominal speeds of blocks, which can 
+       change the overall maximum entry speed conditions of all blocks.
+    */
+    // NOTE: Computed without any expensive trig, sin() or acos(), by trig half angle identity of cos(theta).
+    if (junction_cos_theta > 0.99) {
+      //  For a 0 degree acute junction, just set minimum junction speed. 
+      block->max_junction_speed_sqr = MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED;
+    } else {
+      junction_cos_theta = max(junction_cos_theta,-0.99); // Check for numerical round-off to avoid divide by zero.
+      float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
 
-	  // TODO: Technically, the acceleration used in calculation needs to be limited by the minimum of the
-	  // two junctions. However, this shouldn't be a significant problem except in extreme circumstances.
-	  block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
-								   (block->acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
+      // TODO: Technically, the acceleration used in calculation needs to be limited by the minimum of the
+      // two junctions. However, this shouldn't be a significant problem except in extreme circumstances.
+      block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
+                     (block->acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
 
-	}
+    }
   }
   
   // Store block nominal speed
@@ -419,19 +418,19 @@ uint8_t plan_check_full_buffer()
 
   // Block parking motion from updating this data to ensure next g-code motion is computed correctly.
   if (!is_parking_motion) {
-	// Update previous path unit_vector and nominal speed (squared)
-	memcpy(pl.previous_unit_vec, unit_vec, sizeof(unit_vec)); // pl.previous_unit_vec[] = unit_vec[]
-	pl.previous_nominal_speed_sqr = block->nominal_speed_sqr;
-	
-	// Update planner position
-	memcpy(pl.position, target_steps, sizeof(target_steps)); // pl.position[] = target_steps[]
-
-	// New block is all set. Update buffer head and next buffer head indices.
-	block_buffer_head = next_buffer_head;  
-	next_buffer_head = plan_next_block_index(block_buffer_head);
+    // Update previous path unit_vector and nominal speed (squared)
+    memcpy(pl.previous_unit_vec, unit_vec, sizeof(unit_vec)); // pl.previous_unit_vec[] = unit_vec[]
+    pl.previous_nominal_speed_sqr = block->nominal_speed_sqr;
   
-	// Finish up by recalculating the plan with the new block.
-	planner_recalculate();
+    // Update planner position
+    memcpy(pl.position, target_steps, sizeof(target_steps)); // pl.position[] = target_steps[]
+
+    // New block is all set. Update buffer head and next buffer head indices.
+    block_buffer_head = next_buffer_head;  
+    next_buffer_head = plan_next_block_index(block_buffer_head);
+  
+    // Finish up by recalculating the plan with the new block.
+    planner_recalculate();
   }
   return(PLAN_OK);
 }
@@ -445,7 +444,7 @@ void plan_sync_position()
   uint8_t idx;
   for (idx=0; idx<N_AXIS; idx++) {
     #ifdef COREXY
-     if (idx==A_MOTOR) { 
+      if (idx==A_MOTOR) { 
         pl.position[idx] = (sys.position[A_MOTOR] + sys.position[B_MOTOR])/2;
       } else if (idx==B_MOTOR) { 
         pl.position[idx] = (sys.position[A_MOTOR] - sys.position[B_MOTOR])/2;

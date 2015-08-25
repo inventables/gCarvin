@@ -102,6 +102,7 @@
 #define N_DECIMAL_RATEVALUE_INCH  1 // Rate or velocity value in in/min
 #define N_DECIMAL_RATEVALUE_MM    0 // Rate or velocity value in mm/min
 #define N_DECIMAL_SETTINGVALUE    3 // Decimals for floating point setting values
+#define N_DECIMAL_RPMVALUE        0 // RPM value in rotations per min.
 
 // If your machine has two limits switches wired in parallel to one axis, you will need to enable
 // this feature. Since the two switches are sharing a single pin, there is no way for Grbl to tell
@@ -138,9 +139,8 @@
 
 // After the safety door switch has been toggled and restored, this setting sets the power-up delay
 // between restoring the spindle and coolant and resuming the cycle.
-// NOTE: Delay value is defined in milliseconds from zero to 65,535. 
-#define SAFETY_DOOR_SPINDLE_DELAY 4000
-#define SAFETY_DOOR_COOLANT_DELAY 1000
+#define SAFETY_DOOR_SPINDLE_DELAY 4.0 // Float (seconds)
+#define SAFETY_DOOR_COOLANT_DELAY 1.0 // Float (seconds)
 
 // Enable CoreXY kinematics. Use ONLY with CoreXY machines. 
 // IMPORTANT: If homing is enabled, you must reconfigure the homing cycle #defines above to 
@@ -153,8 +153,11 @@
 
 // Inverts pin logic of the control command pins. This essentially means when this option is enabled
 // you can use normally-closed switches, rather than the default normally-open switches.
-// NOTE: Will eventually be added to Grbl settings in v1.0.
-// #define INVERT_CONTROL_PIN // Default disabled. Uncomment to enable.
+
+// NOTE: If you require individual control pins inverted, keep this macro disabled and simply alter
+//   the CONTROL_INVERT_MASK definition in cpu_map.h files.
+// #define INVERT_ALL_CONTROL_PINS // Default disabled. Uncomment to enable.
+
 
 // Inverts the spindle enable pin from low-disabled/high-enabled to low-enabled/high-disabled. Useful
 // for some pre-built electronic boards.
@@ -237,26 +240,29 @@
 // The hardware PWM output on pin D11 is required for variable spindle output voltages.
 #define VARIABLE_SPINDLE // Default enabled. Comment to disable.
 
-// Used by the variable spindle output only. These parameters set the maximum and minimum spindle speed
-// "S" g-code values to correspond to the maximum and minimum pin voltages. There are 256 discrete and 
-// equally divided voltage bins between the maximum and minimum spindle speeds. So for a 5V pin, 1000
-// max rpm, and 250 min rpm, the spindle output voltage would be set for the following "S" commands: 
-// "S1000" @ 5V, "S250" @ 0.02V, and "S625" @ 2.5V (mid-range). The pin outputs 0V when disabled.
-#define SPINDLE_MAX_RPM 12000.0 // Max spindle RPM. This value is equal to 100% duty cycle on the PWM.
-#define SPINDLE_MIN_RPM 0.0    // Min spindle RPM. This value is equal to (1/256) duty cycle on the PWM.
+
+
+
+
 
 // Used by variable spindle output only. This forces the PWM output to a minimum duty cycle when enabled.
-// When disabled, the PWM pin will still read 0V. Most users will not need this option, but it may be 
-// useful in certain scenarios. This setting does not update the minimum spindle RPM calculations. Any
-// spindle RPM output lower than this value will be set to this value.
-// #define MINIMUM_SPINDLE_PWM 5 // Default disabled. Uncomment to enable. Integer (0-255)
+// The PWM pin will still read 0V when the spindle is disabled. Most users will not need this option, but
+// it may be useful in certain scenarios. This minimum PWM settings coincides with the spindle rpm minimum
+// setting, like rpm max to max PWM. So the variable spindle pin will not output the voltage range between 
+// 0V for disabled and the voltage set by the minimum PWM for minimum rpm.
+// NOTE: Compute duty cycle at the minimum PWM by this equation: (% duty cycle)=(SPINDLE_MINIMUM_PWM/256)*100
+// #define SPINDLE_MINIMUM_PWM 5 // Default disabled. Uncomment to enable. Integer (0-255)
 
 // By default on a 328p(Uno), Grbl combines the variable spindle PWM and the enable into one pin to help 
 // preserve I/O pins. For certain setups, these may need to be separate pins. This configure option uses
 // the spindle direction pin(D13) as a separate spindle enable pin along with spindle speed PWM on pin D11. 
 // NOTE: This configure option only works with VARIABLE_SPINDLE enabled and a 328p processor (Uno). 
 // NOTE: With no direction pin, the spindle clockwise M4 g-code command will be removed. M3 and M5 still work.
+// NOTE: BEWARE! The Arduino bootloader toggles the D13 pin when it powers up. If you flash Grbl with
+// a programmer (you can use a spare Arduino as "Arduino as ISP". Search the web on how to wire this.), 
+// this D13 LED toggling should go away. We haven't tested this though. Please report how it goes!
 // #define USE_SPINDLE_DIR_AS_ENABLE_PIN // Default disabled. Uncomment to enable.
+
 
 // With this enabled, Grbl sends back an echo of the line it has received, which has been pre-parsed (spaces
 // removed, capitalized letters, no comments) and is to be immediately executed by Grbl. Echoes will not be 
@@ -401,15 +407,18 @@
 // pull-out position, power-up with a time-out, and plunge back to the original position at the
 // slower pull-out rate.
 // NOTE: Still a work-in-progress. Machine coordinates must be in all negative space and 
-// does not work with HOMING_FORCE_SET_ORIGIN enabled.
+// does not work with HOMING_FORCE_SET_ORIGIN enabled. Parking motion also moves only in 
+// positive direction.
 #define PARKING_ENABLE  // Default disabled. Uncomment to enable
 
 // Configure options for the parking motion, if enabled.
 #define PARKING_AXIS Z_AXIS // Define which axis that performs the parking motion
 #define PARKING_TARGET -5.0 // Parking axis target. In mm, as machine coordinate [-max_travel,0].
 #define PARKING_RATE -1.0 // Parking fast rate after pull-out. In mm/min or (-1.0) for seek rate.
-#define PARKING_PULLOUT_INCREMENT 5.0 // Initial pull-out and plunge distance in mm. Incremental distance.
 #define PARKING_PULLOUT_RATE 250.0 // Pull-out/plunge slow feed rate in mm/min.
+#define PARKING_PULLOUT_INCREMENT 5.0 // Spindle pull-out and plunge distance in mm. Incremental distance.
+                                      // Must be positive value or equal to zero.
+
 
 // ---------------------------------------------------------------------------------------
 // COMPILE-TIME ERROR CHECKING OF DEFINE VALUES:
@@ -426,8 +435,10 @@
   #error "USE_SPINDLE_DIR_AS_ENABLE_PIN may only be used with a 328p processor"
 #endif
 
-#if defined(PARKING_ENABLE) && defined(HOMING_FORCE_SET_ORIGIN)
-  #error "HOMING_FORCE_SET_ORIGIN is not supported with PARKING_ENABLE at this time."
+#if defined(PARKING_ENABLE)
+  #if defined(HOMING_FORCE_SET_ORIGIN)
+    #error "HOMING_FORCE_SET_ORIGIN is not supported with PARKING_ENABLE at this time."
+  #endif
 #endif
 
 // ---------------------------------------------------------------------------------------
