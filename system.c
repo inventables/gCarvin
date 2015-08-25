@@ -53,7 +53,11 @@ ISR(CONTROL_INT_vect)
       mc_reset();
     } else if (bit_istrue(pin,bit(CYCLE_START_BIT))) 
 	{
-      bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
+	  if (sys.state != STATE_CYCLE )	// this allows the button to act as a door open
+        bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
+      else
+	    bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+  
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
     } else if (bit_istrue(pin,bit(FEED_HOLD_BIT)))
 	{

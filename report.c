@@ -150,7 +150,11 @@ void report_feedback_message(uint8_t message_code)
 // Welcome message
 void report_init_message()
 {
-  printPgmString(PSTR("\r\nGrbl " GRBL_VERSION " ['$' for help]\r\n"));
+  #ifdef CARVIN
+	printPgmString(PSTR("\r\ngCarvin " GRBL_VERSION " ['$' for help]\r\n"));
+  #else
+	printPgmString(PSTR("\r\nGrbl " GRBL_VERSION " ['$' for help]\r\n"));
+  #endif  
 }
 
 // Grbl help message
