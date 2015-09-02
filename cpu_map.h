@@ -160,7 +160,7 @@
   #define INVERT_CONTROL_MASK 	(1<<CYCLE_START_BIT)  // the mask of ones that are inverted.
   
 	
-  // Define probe switch input pin.  (Probe is smart clamp in Carvin)
+  // Define probe switch input pin.  (Probe is smart clamp in gCarvin)
   #define PROBE_DDR       DDRK
   #define PROBE_PIN       PINK
   #define PROBE_PORT      PORTK
@@ -171,7 +171,7 @@
 	// this is spindle control stuff
 	#define TCCRA_REGISTER		TCCR2A
 	#define TCCRB_REGISTER		TCCR2B
-	#define SPINDLE_MOTOR_OCR		OCR2B
+	#define SPINDLE_MOTOR_OCR	OCR2B
 
 	#define COMB_BIT			COM2B1
 	#define WAVE0_REGISTER		WGM20
@@ -179,7 +179,7 @@
 	#define WAVE2_REGISTER		WGM22
 	#define WAVE3_REGISTER		WGM23
 
-	#define PWM_MAX_VALUE 1023
+	#define PWM_MAX_VALUE 255    // timer2 on a mega2650 is an 8 bit timer
 	#define SPINDLE_PWM_DDR		DDRH
 	#define SPINDLE_PWM_PORT    PORTH
 	#define SPINDLE_PWM_BIT		6
