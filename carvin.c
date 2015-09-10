@@ -17,15 +17,24 @@ void carvin_init()
   
 	
 	// make sure steppers are disabled at startup.	
-	STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
 	
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
-  STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
+  
+  
+  
 	
+  #ifdef GEN1_HARDWARE
+    STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
 	set_stepper_current(0);
+  #endif
+  
+  #ifdef GEN2_HARDWARE
+	tmc26x_init();  // SPI functions to program the chips
+  #endif
 	
 	
 	
@@ -83,8 +92,8 @@ void carvin_init()
   
 	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
-  //  Set initial duty cycles 
-  DOOR_LED_OCR = 700;
+  //  Set initial duty cycles
+  DOOR_LED_OCR = 0;
 	
 	
   
@@ -105,18 +114,19 @@ void carvin_init()
   // ----------------Initial LED SETUP -----------------------------
   
   // setup LEDs
-  init_led(&button_led);
-  init_led(&door_led);
-  init_led(&spindle_led);
-  init_led(&spindle_motor);
+  init_pwm(&button_led);
+  init_pwm(&door_led);
+  init_pwm(&spindle_led);
+  init_pwm(&spindle_motor);
   
   // fade on the button and door LEDs at startup	
-  set_led(&button_led, 255,3);
-  set_led(&door_led, 255,3);
+  set_pwm(&button_led, 255,3);
+  set_pwm(&door_led, 255,3);
 	
 	// done initializing Carvin specific things
-	
-	set_stepper_current(STEPPER_RUN_CURRENT);
+	#ifdef GEN1_HARDWARE
+		set_stepper_current(STEPPER_RUN_CURRENT);
+	#endif
 	
 }
 
@@ -129,16 +139,16 @@ void carvin_init()
 ISR(TIMER5_COMPA_vect)
 {
   // see if the led values need to change
-	if (led_level_change(&button_led))
+	if (pwm_level_change(&button_led))
 	  BUTTON_LED_OCR = button_led.current_level;
 		
-	if (led_level_change(&door_led))
+	if (pwm_level_change(&door_led))
 	  DOOR_LED_OCR = door_led.current_level;
 		
-	if (led_level_change(&spindle_led))
+	if (pwm_level_change(&spindle_led))
 	  SPINDLE_LED_OCR = spindle_led.current_level;
   
-    if (led_level_change(&spindle_motor))
+    if (pwm_level_change(&spindle_motor))
 	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
 	
 	#ifdef USE_BUTTON_FOR_ON
@@ -159,72 +169,72 @@ ISR(TIMER5_COMPA_vect)
 }
 
 // init or reset the led values
-void init_led(struct led_analog * led)
+void init_pwm(struct pwm_analog * pwm)
 {
-  (* led).current_level = 0;   
-  (* led).duration = 0;        
-  (* led).dur_counter = 0;     
-  (* led).throb = 0;					 
-  (* led).throb_min = 0;
-  (* led).target = 0;
+  (* pwm).current_level = 0;   
+  (* pwm).duration = 0;        
+  (* pwm).dur_counter = 0;     
+  (* pwm).throb = 0;					 
+  (* pwm).throb_min = 0;
+  (* pwm).target = 0;
 }
 
 // setup an LED with a new brightness level ... change is done via ISR
-void set_led(struct led_analog * led, uint8_t target_level, uint8_t duration)
+void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 {
-	(* led).duration = duration;
-	(* led).throb = false;
-	(* led).target = target_level;
+	(* pwm).duration = duration;
+	(* pwm).throb = false;
+	(* pwm).target = target_level;
 	
 }
 
 // setup an LED for throb ... throbing is done via ISR
-void throb_led(struct led_analog * led, uint8_t min_throb, uint8_t duration)
+void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
 {
-	(* led).duration = duration;	
-	(* led).throb = true;	
-	(* led).target = LED_FULL_ON; // asume throb on first
+	(* pwm).duration = duration;	
+	(* pwm).throb = true;	
+	(* pwm).target = LED_FULL_ON; // asume throb on first
 }
 
 // Adjusts the level of an LED
 // Returns true if the value changed
 // This is called by the timer ISR...there is no reason to call it outside the ISR
-int led_level_change(struct led_analog * led)
+int pwm_level_change(struct pwm_analog * pwm)
 {
   // see if the value needs to change
-	if ((* led).target == (* led).current_level)
+	if ((* pwm).target == (* pwm).current_level)
 		return false;
 	
 	// if duration is 0 change the level right away
-	if ((* led).duration == 0)  
+	if ((* pwm).duration == 0)  
 	{
-		(* led).current_level = (* led).target;
+		(* pwm).current_level = (* pwm).target;
 		return true;
 	}
 	
 	
 	// the duration counter causes the function to be called more than once before it makes a change by counting down to 1
-	if ((* led).dur_counter > 1)
+	if ((* pwm).dur_counter > 1)
 	{
-	  (* led).dur_counter--;  // count down to 1
+	  (* pwm).dur_counter--;  // count down to 1
 	}
 	else
 	{
-		if ((* led).current_level < (* led).target)
+		if ((* pwm).current_level < (* pwm).target)
 		{
-			(* led).current_level++;
-			if ((* led).throb && (* led).current_level == LED_FULL_ON)  // check to see if we need to reverse the throb
-				(* led).target = (* led).throb_min;
+			(* pwm).current_level++;
+			if ((* pwm).throb && (* pwm).current_level == LED_FULL_ON)  // check to see if we need to reverse the throb
+				(* pwm).target = (* pwm).throb_min;
 		}
 		else
 		{
-			(* led).current_level--;
-			if ((* led).throb && (* led).current_level <= (* led).throb_min)  // check to see if we need to reverse the throb
-				(* led).target = LED_FULL_ON;
+			(* pwm).current_level--;
+			if ((* pwm).throb && (* pwm).current_level <= (* pwm).throb_min)  // check to see if we need to reverse the throb
+				(* pwm).target = LED_FULL_ON;
 		}
 		
 				
-		(* led).dur_counter = (* led).duration;  // reset the duration counter
+		(* pwm).dur_counter = (* pwm).duration;  // reset the duration counter
 		return true;
 	 
   }
@@ -233,6 +243,7 @@ int led_level_change(struct led_analog * led)
 	
 }
 
+#ifdef GEN1_HARDWARE
 void set_stepper_current(float current)
 {
 	
@@ -246,8 +257,9 @@ void set_stepper_current(float current)
   
   STEPPER_VREF_OCR = (int)vref;
 	
-	
 }
+#endif
+
 
 // This is a software reset using the watchdog timer
 void reset_cpu()

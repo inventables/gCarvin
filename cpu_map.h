@@ -34,6 +34,9 @@
 #ifdef CPU_MAP_CARVIN // The Inventables Carvin Controller for Carvey
 
   #define CARVIN           // Allows other modules to conditionally compile for CARVIN
+  //#define GEN1_HARDWARE  // The first Inventables hardware used on prototypes
+  #define GEN2_HARDWARE    // The hardware used with the 48V input
+  
 	//#define USE_BUTTON_FOR_ON  // can be used for test purposes
   // Increase Buffers to make use of extra SRAM
 //#define RX_BUFFER_SIZE		  256
@@ -66,8 +69,8 @@
   #define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
 
   // Define stepper driver enable/disable output pin.
-  #define STEPPERS_DISABLE_DDR   DDRB
-  #define STEPPERS_DISABLE_PORT  PORTB
+  #define STEPPERS_DISABLE_DDR   DDRH
+  #define STEPPERS_DISABLE_PORT  PORTH
   #define STEPPERS_DISABLE_BIT   7 
   #define STEPPERS_DISABLE_MASK (1<<STEPPERS_DISABLE_BIT)
   
@@ -77,26 +80,25 @@
   #define BUTTON_LED_PORT     PORTH
   #define BUTTON_LED_BIT      3  
   #define BUTTON_LED_OCR 	  OCR4A
-	/*
-	// Schematic has an error that port it on port E see below 
-	
-  #define DOOR_LED_DDR     	  DDRH
-  #define DOOR_LED_PORT    	  PORTH
-  #define DOOR_LED_BIT     	  4
-	
-	// more human readable names for the output compare registers (PWM duty)
 
-//#define DOOR_LED_OCR OCR4B  //error on schematic see next line
+// DOOR LED ============
+// door LED is defined on deferent ports on the 2 versions of hardware  
+#ifdef GEN1_HARDWARE
+  #define DOOR_LED_DDR     DDRE  // name the direction register
+  #define DOOR_LED_PORT    PORTE // name the port register
+  #define DOOR_LED_BIT     4   // what bit on the port is it?   E4 is Timer 3
+  #define DOOR_LED_OCR     OCR3B  // temp fix
+#endif
 
- 
-  
-	*/
+#ifdef GEN2_HARDWARE
+	#define DOOR_LED_DDR     DDRH  // name the direction register
+	#define DOOR_LED_PORT    PORTH // name the port register
+	#define DOOR_LED_BIT     4   // what bit on the port is it?
+	#define DOOR_LED_OCR     OCR4B // the value of the duty cycle
+	#define DOOR_LED_MAX     1023
+#endif
 	
-	#define DOOR_LED_DDR     DDRE  // name the direction register
-    #define DOOR_LED_PORT    PORTE // name the port register
-    #define DOOR_LED_BIT     4   // what bit on the port is it?   E4 is Timer 3
-	#define DOOR_LED_OCR     OCR3B  // temp fix
-	
+#ifdef GEN1_HARDWARE	// GEN1 uses an analog voltage for stepper current
 	#define STEPPER_VREF_DDR     DDRE
     #define STEPPER_VREF_PORT    PORTE
     #define STEPPER_VREF_BIT     3   // E3 is Timer 3
@@ -104,6 +106,8 @@
 	#define I_SENSE_RESISTOR     0.27
 	#define STEPPER_RUN_CURRENT  2.2
 	#define STEPPER_HOMING_CURRENT  0.75
+#endif
+
 	
     #define SPINDLE_LED_DDR     DDRH
     #define SPINDLE_LED_PORT    PORTH

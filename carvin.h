@@ -20,7 +20,7 @@
 
 #define CARVIN_TIMING_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
-struct led_analog{
+struct pwm_analog{
   unsigned char target;        // what is the desired brightness
   unsigned char current_level; // how bright is is now
   unsigned char duration;      // time in 1/2 seconds to get there (3 = 1.5 seconds)...0 = on right away
@@ -32,17 +32,17 @@ struct led_analog{
 void carvin_init();
 
 // functions to work with the LEDs
-void init_led(struct led_analog * led);
-void set_led(struct led_analog * led, unsigned char target_level, unsigned char duration);
-int led_level_change(struct led_analog * led);  // checks to see if a level change is needed
+void init_pwm(struct pwm_analog * led);
+void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
+int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is needed
 
 void print_sw_states(); // print the switch state like "SW XYZPD"  X,Y,Z, Probe, Door  
 
 void reset_cpu();   // software full reset of the CPU
 
 // the LEDs
-struct led_analog button_led;
-struct led_analog door_led;
-struct led_analog spindle_led;
-struct led_analog spindle_motor;
+struct pwm_analog button_led;
+struct pwm_analog door_led;
+struct pwm_analog spindle_led;
+struct pwm_analog spindle_motor;
 #endif

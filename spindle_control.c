@@ -31,18 +31,18 @@ void spindle_init()
   TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02; // set to 1/8 Prescaler
     
   // start with spindle off
-  set_led(&spindle_motor, 0,0);
+  set_pwm(&spindle_motor, 0,0);
 }
 
 
 void spindle_stop()
 {
   // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
-  set_led(&spindle_motor, 0,SPINDLE_SPINDOWN_RATE);  // fade off spindle
+  set_pwm(&spindle_motor, 0,SPINDLE_SPINDOWN_RATE);  // fade off spindle
 	
   // LED cross fade
-  set_led(&spindle_led, LED_FULL_OFF,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
-  set_led(&door_led, LED_FULL_ON,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
+  set_pwm(&spindle_led, LED_FULL_OFF,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
+  set_pwm(&door_led, LED_FULL_ON,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
   
 }
 
@@ -78,9 +78,9 @@ void spindle_set_state(uint8_t state, float rpm)
 	#endif
   }  
   
-	set_led(&spindle_motor, current_pwm,SPINDLE_SPINUP_RATE);  // fade on spindle
-	set_led(&spindle_led, LED_FULL_ON,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
-	set_led(&door_led, LED_FULL_OFF,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
+	set_pwm(&spindle_motor, current_pwm,SPINDLE_SPINUP_RATE);  // fade on spindle
+	set_pwm(&spindle_led, LED_FULL_ON,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
+	set_pwm(&door_led, LED_FULL_OFF,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
      
   }
 }

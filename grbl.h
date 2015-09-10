@@ -47,6 +47,9 @@
 #include "cpu_map.h"
 #ifdef CARVIN
 	#include "carvin.h"
+	#ifdef GEN2_HARDWARE
+		#include "TMC26x.h"
+	#endif
 #endif
 #include "coolant_control.h"
 #include "eeprom.h"
