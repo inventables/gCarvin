@@ -21,6 +21,7 @@
 #include "grbl.h"
 
 
+
 void system_init() 
 {
   CONTROL_DDR &= ~(CONTROL_MASK); // Configure as input pins
@@ -40,6 +41,15 @@ void system_init()
 // directly from the incoming serial data stream.
 ISR(CONTROL_INT_vect) 
 {
+	
+  // Debounce.  The counter will count down in a timer interrupt
+  // past the bouncing phase of the switch push and read it during the 
+  // stable phase.
+  control_button_counter = CONTROL_DEBOUNCE_COUNT; 
+}
+
+void checkControlPins()
+{
   uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
   
   // if some are inverted they need flipped
@@ -53,10 +63,12 @@ ISR(CONTROL_INT_vect)
       mc_reset();
     } else if (bit_istrue(pin,bit(CYCLE_START_BIT))) 
 	{
-	  if (sys.state != STATE_CYCLE )	// this allows the button to act as a door open
-        bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
-      else
-	    bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+	
+	  if (sys.state == STATE_HOLD)	// this allows the button to act as a door open
+		bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
+	  else if (sys.state != STATE_IDLE)
+		bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+	
   
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
     } else if (bit_istrue(pin,bit(FEED_HOLD_BIT)))
@@ -89,6 +101,8 @@ uint8_t system_check_safety_door_ajar()
   #else
     return(false); // Input pin not enabled, so just return that it's closed.
   #endif
+  
+  
 }
 
 

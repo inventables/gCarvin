@@ -20,6 +20,10 @@
 
 #define CARVIN_TIMING_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
+#define CONTROL_DEBOUNCE_COUNT 8 // this is count down by timer5
+
+extern int control_button_counter;
+
 struct pwm_analog{
   unsigned char target;        // what is the desired brightness
   unsigned char current_level; // how bright is is now
@@ -45,4 +49,6 @@ struct pwm_analog button_led;
 struct pwm_analog door_led;
 struct pwm_analog spindle_led;
 struct pwm_analog spindle_motor;
+
+
 #endif

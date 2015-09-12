@@ -11,6 +11,9 @@
 
 int off_button_counter = 0;   // this times how long the button has been held in to turn the machine off
 
+int control_button_counter = 0;
+
+
 // setup routine for a Carvin Controller
 void carvin_init()
 {
@@ -150,7 +153,13 @@ ISR(TIMER5_COMPA_vect)
   
     if (pwm_level_change(&spindle_motor))
 	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
-	
+  
+    if (control_button_counter > 0)
+	{
+		control_button_counter--;
+		if (control_button_counter == 0)
+			checkControlPins();
+	}
 	#ifdef USE_BUTTON_FOR_ON
   // if the button is pushed, count up to see if it is held long enough to reset cpu
   if (bit_isfalse(CONTROL_PIN,bit(CYCLE_START_BIT)))
@@ -191,9 +200,10 @@ void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 // setup an LED for throb ... throbing is done via ISR
 void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
 {
+	(* pwm).current_level = 0;
 	(* pwm).duration = duration;	
 	(* pwm).throb = true;	
-	(* pwm).target = LED_FULL_ON; // asume throb on first
+	(* pwm).target = LED_FULL_ON;
 }
 
 // Adjusts the level of an LED
@@ -205,7 +215,7 @@ int pwm_level_change(struct pwm_analog * pwm)
 	if ((* pwm).target == (* pwm).current_level)
 		return false;
 	
-	// if duration is 0 change the level right away
+	// if duration is 0, change the level right away
 	if ((* pwm).duration == 0)  
 	{
 		(* pwm).current_level = (* pwm).target;
