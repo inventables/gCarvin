@@ -193,10 +193,32 @@ static st_prep_t prep;
 // enabled. Startup init and limits call this function but shouldn't start the cycle.
 void st_wake_up() 
 {
+	
+  //printPgmString(PSTR("Wakeup\r\n"));	//debug info
+	
   // Enable stepper drivers.
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
-  else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
-
+  #ifdef CARVIN
+  #ifdef GEN2_HARDWARE
+    //setTMC26xRunCurrent(true); // turned this off while working on homing bug
+  #endif
+  #endif
+  
+  
+  
+  
+  #ifdef CARVIN
+  
+	STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);  // this is the GEN2_HARDWARE TODO add the GEN1
+	
+  #else
+	  
+  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) 
+	{ STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+  else 
+	{ STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
+  #endif	
+  
+  
 //   if (sys.state & (STATE_CYCLE | STATE_HOMING)){
     // Initialize stepper output bits
     st.dir_outbits = dir_port_invert_mask; 
@@ -222,10 +244,14 @@ void st_wake_up()
 // Stepper shutdown
 void st_go_idle() 
 {
+  //printPgmString(PSTR("Go Idle\r\n")); //debug text
+	
   // Disable Stepper Driver Interrupt. Allow Stepper Port Reset Interrupt to finish, if active.
   TIMSK1 &= ~(1<<OCIE1A); // Disable Timer1 interrupt
   TCCR1B = (TCCR1B & ~((1<<CS12) | (1<<CS11))) | (1<<CS10); // Reset clock to no prescaling.
   busy = false;
+  
+  
   
   // Set stepper driver idle state, disabled or enabled, depending on settings and circumstances.
   bool pin_state = false; // Keep enabled.
@@ -235,9 +261,33 @@ void st_go_idle()
     delay_ms(settings.stepper_idle_lock_time);
     pin_state = true; // Override. Disable steppers.
   }
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { pin_state = !pin_state; } // Apply pin invert.
-  if (pin_state) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
-  else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
+  
+#ifdef CARVIN
+
+  #ifdef GEN2_HARDWARE    
+    //setTMC26xRunCurrent(false);	
+	
+	// if we are in alarm, we can turn the motors off, else leave them on
+	// this allows hand movement before homing
+	
+	if (sys.state == STATE_ALARM)	{  // think about STATE_HOMING
+		
+		STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+	}
+	else
+	{
+		STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);	
+	}
+  #endif
+  
+#else
+  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) 
+	{ pin_state = !pin_state; } // Apply pin invert.
+  if (pin_state) 
+	{ STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+  else 
+	{ STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
+#endif
 }
 
 

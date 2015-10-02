@@ -41,18 +41,22 @@ void system_init()
 // directly from the incoming serial data stream.
 ISR(CONTROL_INT_vect) 
 {
-	
-  // Debounce.  The counter will count down in a timer interrupt
-  // past the bouncing phase of the switch push and read it during the 
-  // stable phase.
-  control_button_counter = CONTROL_DEBOUNCE_COUNT; 
+  control_button_counter = CONTROL_DEBOUNCE_COUNT;  // the inital count is set here
+  /*
+  The front button acts as a stop and a restart.  Therefore bouncing cannot be tolerated
+  
+  A timer5 interrupt will count down to 0 and check the pin state
+  if there is bouncing, this will reset the count before the pins are checked
+  
+  */
 }
+
 
 void checkControlPins()
 {
   uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
   
-  // if some are inverted they need flipped
+  // if some are inverted logic pins they need flipped
   #ifdef INVERT_CONTROL_MASK
     pin ^= INVERT_CONTROL_MASK;
   #endif
@@ -222,6 +226,29 @@ uint8_t system_execute_line(char *line)
             settings_store_build_info(line);
           }
           break; 
+		#ifdef CARVIN
+		case 'K':
+			tmc26x_init();  // just for testing
+			//reset_cpu();  // hard reset
+		break;
+		case 'L':
+		    if(line[++char_counter] == '1')
+			{
+				throb_pwm(&button_led, 40,2);
+				throb_pwm(&door_led, 40,2);
+				throb_pwm(&spindle_led, 40,2);
+			}
+			else
+			{
+				set_pwm(&button_led, 0,4);
+				set_pwm(&door_led, 0,4);
+				set_pwm(&spindle_led, 0,4);
+			}
+		break;
+		case 'S':
+			print_switch_states();
+		break;
+		#endif
         case 'R' : // Restore defaults [IDLE/ALARM]
           if (line[++char_counter] != 'S') { return(STATUS_INVALID_STATEMENT); }
           if (line[++char_counter] != 'T') { return(STATUS_INVALID_STATEMENT); }
@@ -235,7 +262,7 @@ uint8_t system_execute_line(char *line)
           }
           report_feedback_message(MESSAGE_RESTORE_DEFAULTS);
           mc_reset(); // Force reset to ensure settings are initialized correctly.
-          break;
+          break;		
         case 'N' : // Startup lines. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) { // Print startup lines
             for (helper_var=0; helper_var < N_STARTUP_LINE; helper_var++) {

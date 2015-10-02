@@ -9,9 +9,9 @@
 #include "settings.h"
 #include "carvin.h"
 
-int off_button_counter = 0;   // this times how long the button has been held in to turn the machine off
 
-int control_button_counter = 0;
+
+int control_button_counter = 0;  // initialize this for use in button debouncing
 
 
 // setup routine for a Carvin Controller
@@ -19,17 +19,14 @@ void carvin_init()
 {
   
 	
-	// make sure steppers are disabled at startup.	
-  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-	
+ 
+  
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
   
-  
-  
-	
+ 
   #ifdef GEN1_HARDWARE
     STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
 	set_stepper_current(0);
@@ -39,51 +36,16 @@ void carvin_init()
 	tmc26x_init();  // SPI functions to program the chips
   #endif
 	
-	
-	
-	#ifdef USE_BUTTON_FOR_ON
-	
-	long switch_open_count = 0;
-	
-	// -------------------- Be sure button is not pushed in at startup ----------------------------
-	// the button may still be pushed from a prevoius power down
-	// wait until it comes up for a while
-	// wait for switch to open for given time	
-	while (switch_open_count < BUTTON_UP_WAIT_TIME)
-	{
-		if (bit_istrue(CONTROL_PIN,bit(CYCLE_START_BIT)))
-			switch_open_count++;   // count up only while button is not pushed
-		else
-			switch_open_count = 0; // reset count
-	}
-	
-  // --------------------- Wait for turn on button push ---------------------------------
-	
 
-  // Wait in this loop until front "on" button is pushed
-  while (bit_istrue(CONTROL_PIN,bit(CYCLE_START_BIT)))
-  {
-	// do nothing until the button is pushed
-  }
-	#endif
-	
-	
   
 	// -------------- Setup PWM on Timer 4 ------------------------------
 	
   //  Setup PWM For LEDs
-  //  --------- Timer 4 ... it controls the following pins ----------
-  //  Mega pin 6, PORTH BIT3, OCR4A (Button LED)
-  //  Mega pin 7, PORTH BIT4, OCR4B (Door Light)  !!!! schem error
-  //  Mega pin 8, PORTH BIT5, OCR4C (Spidle Light) 
   TCCR4A = (1<<COM4A1) | (1<<COM4B1) | (1<<COM4C1) |(1<<WGM41) | (1<<WGM40);
   TCCR4B = (TCCR4B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycles
-  BUTTON_LED_OCR = 0; 
-  //DOOR_LED_OCR = 0;
+  BUTTON_LED_OCR = 0;
   SPINDLE_LED_OCR = 0;
-	
-	
 	
 	
 	// -------------- Setup PWM on Timer 3 ------------------------------
@@ -95,7 +57,7 @@ void carvin_init()
   
 	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
-  //  Set initial duty cycles
+  //  Set initial duty cycle
   DOOR_LED_OCR = 0;
 	
 	
@@ -103,7 +65,7 @@ void carvin_init()
   
   // ---------------- TIMER5 ISR SETUP --------------------------
   
-  // Setup a timer5 interrupt to handle timing of things like LED animations in the background
+  // Setup a timer5 interrupt to handle timing of things like LED animations and spindle soft start in the background
   TCCR5A = 0;     // Clear entire TCCR1A register
   TCCR5B = 0;     // Clear entire TCCR1B register
   
@@ -116,7 +78,7 @@ void carvin_init()
   
   // ----------------Initial LED SETUP -----------------------------
   
-  // setup LEDs
+  // setup LEDs and spindle
   init_pwm(&button_led);
   init_pwm(&door_led);
   init_pwm(&spindle_led);
@@ -126,9 +88,13 @@ void carvin_init()
   set_pwm(&button_led, 255,3);
   set_pwm(&door_led, 255,3);
 	
-	// done initializing Carvin specific things
+	// set the stepper currents
 	#ifdef GEN1_HARDWARE
 		set_stepper_current(STEPPER_RUN_CURRENT);
+	#endif
+	
+	#ifdef GEN2_HARDWARE
+		//setTMC26xRunCurrent(0); // not run current yet TOD0 Debugging motors
 	#endif
 	
 }
@@ -136,9 +102,9 @@ void carvin_init()
 // Timer3 Interrupt
 // keep this fast to not bother the stepper timing
 // Things done here......
-// 	LED animations
-//  Timing the off button push
-
+// 	LED Animations
+//  Spindle Softstart
+//  Button debounce
 ISR(TIMER5_COMPA_vect)
 {
   // see if the led values need to change
@@ -154,26 +120,14 @@ ISR(TIMER5_COMPA_vect)
     if (pwm_level_change(&spindle_motor))
 	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
   
+  
     if (control_button_counter > 0)
 	{
 		control_button_counter--;
 		if (control_button_counter == 0)
 			checkControlPins();
 	}
-	#ifdef USE_BUTTON_FOR_ON
-  // if the button is pushed, count up to see if it is held long enough to reset cpu
-  if (bit_isfalse(CONTROL_PIN,bit(CYCLE_START_BIT)))
-  {
-		if (off_button_counter == OFF_BUTTON_COUNT)
-			reset_cpu();
-		else
-			off_button_counter++;
-  }
-  else
-  {
-		off_button_counter = 0;  // reset the count
-  }
-	#endif
+	
 	
 }
 
@@ -257,7 +211,7 @@ int pwm_level_change(struct pwm_analog * pwm)
 void set_stepper_current(float current)
 {
 	
-	float vref = 0;
+  float vref = 0;
   
   // current = VREF /(8× RS)  from driver datasheet
   vref = current * (8 * I_SENSE_RESISTOR);  
@@ -266,20 +220,36 @@ void set_stepper_current(float current)
   vref = (vref /2.5) * 1023 / 2;
   
   STEPPER_VREF_OCR = (int)vref;
-	
 }
 #endif
 
 
-// This is a software reset using the watchdog timer
+// This is a software driver hard reset using the watchdog timer
 void reset_cpu()
 {
-  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); // turn off the stepper drivers
-	
   wdt_enable(WDTO_15MS);
   while(1)
   {
 		// wait for it...boom
   }
 }
+
+void print_switch_states()
+{
+	printPgmString(PSTR("{Sw:"));
+	
+	printPgmString(PSTR("Ctl:"));
+    print_uint8_base2(CONTROL_PIN & CONTROL_MASK);
+	
+	printPgmString(PSTR(",Lim:"));	
+	print_uint8_base2(LIMIT_PIN & LIMIT_MASK);
+	
+	printPgmString(PSTR(",Prb:"));	
+	print_uint8_base2(PROBE_PIN & PROBE_MASK);
+	
+	printPgmString(PSTR("}\r\n"));
+	
+}
+
+
 

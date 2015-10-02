@@ -1,8 +1,10 @@
 #include <avr/io.h>
 #include "spi.h"
-
+#include "grbl.h"
 
 void tmc26x_init();
+void setTMC26xRunCurrent(uint8_t);
+
 uint32_t setTMC26xCHOPCONF(uint8_t blankingTime, uint8_t chopModeStd, uint8_t randomTimeOff);
 uint32_t setTMC26xSMARTEN(char minCoolCurrent);
 uint32_t setTMC26xSGSCONF(uint8_t filterEnable, int8_t stallGuardThreshold, uint8_t currentScale);
@@ -23,6 +25,8 @@ uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microst
    
 #define T_OFF_PATTERN 0xful
 #define RANDOM_TOFF_TIME 0x2000ul
+#define YES_RANDOM_TIME_OFF 1
+#define NO_RANDOM_TIME_OFF 0
 
 #define BLANK_TIMING_PATTERN 0x18000ul
 #define BLANK_TIMING_SHIFT 15
@@ -70,12 +74,21 @@ uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microst
 #define CS_Z_BIT      2
 #define CS_MASK       ((1<<CS_X_BIT) | (1<<CS_Y_BIT) | (1<<CS_Z_BIT))
 
-#define X_CURRENT 10 
-#define Y_CURRENT 22
-#define Z_CURRENT 22
+#define X_RUN_CURRENT 20
+#define Y_RUN_CURRENT 20
+#define Z_RUN_CURRENT 20
+
+#define X_IDLE_CURRENT 20
+#define Y_IDLE_CURRENT 20
+#define Z_IDLE_CURRENT 20
+
 #define X_MICROSTEPS 16
 #define Y_MICROSTEPS 16
 #define Z_MICROSTEPS 2
+
+#define CARVEY_CHOPPER_BLANKING_TIME 16 // use 16,24,36 0r 54 only ... low is quiet high is accurate
+#define CARVEY_RANDOM_TIME_OFF NO_RANDOM_TIME_OFF // is the random chopper off timing used.
+#define CARVEY_STALL_GAURD_THRESHOLD 10 
 
 
 void tmc26x_init()
@@ -88,36 +101,56 @@ void tmc26x_init()
   
   spi_init();  // initialize the SPI port
   
+ 
   
   // setup x axis driver
   csBit = CS_X_BIT;
-  spi_send20bit(setTMC26xCHOPCONF(24, CHOPPER_MODE_STANDARD, 0), &CS_PORT, csBit);
+  delay_ms(20);  // give a little time before SPI starts
+  spi_send20bit(setTMC26xCHOPCONF(CARVEY_CHOPPER_BLANKING_TIME, CHOPPER_MODE_STANDARD, CARVEY_RANDOM_TIME_OFF), &CS_PORT, csBit);
   spi_send20bit(setTMC26xSMARTEN(MIN_COOL_CURRENT_HALF), &CS_PORT, csBit);
-  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, 10, X_CURRENT), &CS_PORT, csBit);
+  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_RUN_CURRENT), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCONF(READOUT_VALUE_SG2), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCTRL(STEP_ITERPOL_DISABLE,DOUBLE_EDGE_DISABLE,X_MICROSTEPS), &CS_PORT, csBit);
   
   // setup Y axis driver
   csBit = CS_Y_BIT;
-  spi_send20bit(setTMC26xCHOPCONF(24, CHOPPER_MODE_STANDARD, 0), &CS_PORT, csBit);
+  delay_ms(20); // give a little time before SPI starts
+  spi_send20bit(setTMC26xCHOPCONF(CARVEY_CHOPPER_BLANKING_TIME, CHOPPER_MODE_STANDARD, CARVEY_RANDOM_TIME_OFF), &CS_PORT, csBit);
   spi_send20bit(setTMC26xSMARTEN(MIN_COOL_CURRENT_HALF), &CS_PORT, csBit);
-  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, 10, Y_CURRENT), &CS_PORT, csBit);
+  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_RUN_CURRENT), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCONF(READOUT_VALUE_SG2), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCTRL(STEP_ITERPOL_DISABLE,DOUBLE_EDGE_DISABLE,Y_MICROSTEPS), &CS_PORT, csBit);
   
-  csBit = CS_Z_BIT;
+ 
   
   // setup x axis driver
   csBit = CS_Z_BIT;
-  spi_send20bit(setTMC26xCHOPCONF(24, CHOPPER_MODE_STANDARD, 0), &CS_PORT, csBit);
+  delay_ms(20); // give a little time before SPI starts
+  spi_send20bit(setTMC26xCHOPCONF(CARVEY_CHOPPER_BLANKING_TIME, CHOPPER_MODE_STANDARD, CARVEY_RANDOM_TIME_OFF), &CS_PORT, csBit);
   spi_send20bit(setTMC26xSMARTEN(MIN_COOL_CURRENT_HALF), &CS_PORT, csBit);
-  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, 10, Z_CURRENT), &CS_PORT, csBit);
+  spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_RUN_CURRENT), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCONF(READOUT_VALUE_SG2), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCTRL(STEP_ITERPOL_DISABLE,DOUBLE_EDGE_DISABLE,Z_MICROSTEPS), &CS_PORT, csBit);
   
-  
- 
 }
+
+
+void setTMC26xRunCurrent(uint8_t level)  // 1 = run, 0 = idle
+{
+	if (level == 1)
+	{	
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_RUN_CURRENT), &CS_PORT, CS_X_BIT);
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_RUN_CURRENT), &CS_PORT, CS_Y_BIT);
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_RUN_CURRENT), &CS_PORT, CS_Z_BIT);
+	}
+	else 
+	{
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_IDLE_CURRENT), &CS_PORT, CS_X_BIT);
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_IDLE_CURRENT), &CS_PORT, CS_Y_BIT);
+		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_IDLE_CURRENT), &CS_PORT, CS_Z_BIT);
+	}
+}
+
 
 unsigned long readValue(uint8_t readItem)
  {
@@ -172,8 +205,8 @@ uint32_t setTMC26xCHOPCONF(uint8_t blankingTime, uint8_t chopModeStd, uint8_t ra
     if(!chopModeStd)
       regVal |= CHOPPER_MODE_T_OFF_FAST_DECAY;
       
-    if (randomTimeOff)
-      regVal |=RANDOM_TOFF_TIME;
+    if (randomTimeOff == YES_RANDOM_TIME_OFF)
+      regVal |= RANDOM_TOFF_TIME;
      
     // the rest of the values are based on Chopper mode 
     if (chopModeStd)

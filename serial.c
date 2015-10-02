@@ -169,6 +169,7 @@ ISR(SERIAL_RX)
     case CMD_FEED_HOLD:     bit_true_atomic(sys.rt_exec_state, EXEC_FEED_HOLD); break; // Set as true
     case CMD_SAFETY_DOOR:   bit_true_atomic(sys.rt_exec_state, EXEC_SAFETY_DOOR); break; // Set as true
     case CMD_RESET:         mc_reset(); break; // Call motion control reset routine.
+	case CMD_RESET_CPU:     reset_cpu(); break; // hard reset the CPU
     default: // Write character to buffer    
       next_head = serial_rx_buffer_head + 1;
       if (next_head == RX_BUFFER_SIZE) { next_head = 0; }

@@ -31,7 +31,7 @@
   // Grbl generic default settings. Should work across different machines.
   #define DEFAULT_X_STEPS_PER_MM 88.889
   #define DEFAULT_Y_STEPS_PER_MM 88.889
-  #define DEFAULT_Z_STEPS_PER_MM 3023.146  // or 5120 (for older m8 rods)
+  #define DEFAULT_Z_STEPS_PER_MM 377.893  // or 5120 (for older m8 rods)
   #define DEFAULT_X_MAX_RATE 3000.0 // mm/min
   #define DEFAULT_Y_MAX_RATE 3000.0 // mm/min
   #define DEFAULT_Z_MAX_RATE 200.0 // mm/min
@@ -45,7 +45,7 @@
   #define DEFAULT_SPINDLE_RPM_MIN 0.0 // rpm
   #define DEFAULT_STEP_PULSE_MICROSECONDS 10
   #define DEFAULT_STEPPING_INVERT_MASK 0
-  #define DEFAULT_DIRECTION_INVERT_MASK ((1<<X_AXIS) | (1<<Y_AXIS) | (1<<Z_AXIS))
+  #define DEFAULT_DIRECTION_INVERT_MASK 0 // was ((1<<X_AXIS) | (1<<Y_AXIS) | (1<<Z_AXIS)) on GEN1
   #define DEFAULT_STEPPER_IDLE_LOCK_TIME 255 // msec (0-254, 255 keeps steppers enabled)
   #define DEFAULT_STATUS_REPORT_MASK ((BITFLAG_RT_STATUS_MACHINE_POSITION)|(BITFLAG_RT_STATUS_WORK_POSITION))
   #define DEFAULT_JUNCTION_DEVIATION 0.02 // mm

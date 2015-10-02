@@ -33,17 +33,10 @@
 
 #ifdef CPU_MAP_CARVIN // The Inventables Carvin Controller for Carvey
 
-  #define CARVIN           // Allows other modules to conditionally compile for CARVIN
-  //#define GEN1_HARDWARE  // The first Inventables hardware used on prototypes
-  #define GEN2_HARDWARE    // The hardware used with the 48V input
+  #define CARVIN           // Setting this allows other modules to conditionally compile for CARVIN
+  //#define GEN1_HARDWARE  // The first Inventables hardware used on prototypes.  This uses an analog voltage current control
+  #define GEN2_HARDWARE    // The hardware used with the 48V input.  The stepper drivers are SPI controlled
   
-	//#define USE_BUTTON_FOR_ON  // can be used for test purposes
-  // Increase Buffers to make use of extra SRAM
-//#define RX_BUFFER_SIZE		  256
-//#define TX_BUFFER_SIZE		  128
-//#define BLOCK_BUFFER_SIZE	  36
-//#define LINE_BUFFER_SIZE	  100
-//#define SEGMENT_BUFFER_SIZE 10
 
   // Serial port pins
   #define SERIAL_RX USART0_RX_vect

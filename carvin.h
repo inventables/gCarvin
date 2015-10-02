@@ -22,7 +22,7 @@
 
 #define CONTROL_DEBOUNCE_COUNT 8 // this is count down by timer5
 
-extern int control_button_counter;
+extern int control_button_counter;  // Used to debounce the control button.
 
 struct pwm_analog{
   unsigned char target;        // what is the desired brightness
@@ -40,7 +40,9 @@ void init_pwm(struct pwm_analog * led);
 void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
 int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is needed
 
-void print_sw_states(); // print the switch state like "SW XYZPD"  X,Y,Z, Probe, Door  
+
+
+void print_switch_states();
 
 void reset_cpu();   // software full reset of the CPU
 
