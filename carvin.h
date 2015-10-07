@@ -14,9 +14,22 @@
 #define OFF_BUTTON_COUNT 1000 // about 2 seconds
 
 
-
+// LED Mode Levels
 #define LED_FULL_ON 255
 #define LED_FULL_OFF 0
+
+#define DOOR_LED_LEVEL_IDLE 255
+#define DOOR_LED_LEVEL_RUN 0
+#define DOOR_LED_THROB_MIN 60
+
+#define SPINDLE_LED_LEVEL_IDLE 0
+#define SPINDLE_LED_LEVEL_RUN 255
+#define SPINDLE_LED_THROB_MIN 60
+
+#define BUTTON_LED_LEVEL_ON 255
+#define BUTTON_LED_LEVEL_OFF 0
+#define BUTTON_LED_THROB_MIN 60
+#define BUTTON_LED_THROB_RATE 1 // 1/2 second
 
 #define CARVIN_TIMING_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
@@ -29,7 +42,7 @@ struct pwm_analog{
   unsigned char current_level; // how bright is is now
   unsigned char duration;      // time in 1/2 seconds to get there (3 = 1.5 seconds)...0 = on right away
   unsigned char dur_counter;   // where are we in the duration delay
-  unsigned char throb;         // 1 = light will throb
+  unsigned char throb;         // 1 = light will throb...fade on...fade off
   unsigned char throb_min;     // what is the minimum brightness of the throb.  It can look harsh if it goes off or nearly off
 };
 

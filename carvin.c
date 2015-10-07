@@ -85,8 +85,8 @@ void carvin_init()
   init_pwm(&spindle_motor);
   
   // fade on the button and door LEDs at startup	
-  set_pwm(&button_led, 255,3);
-  set_pwm(&door_led, 255,3);
+  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
 	
 	// set the stepper currents
 	#ifdef GEN1_HARDWARE
@@ -147,17 +147,21 @@ void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 {
 	(* pwm).duration = duration;
 	(* pwm).throb = false;
-	(* pwm).target = target_level;
-	
+	(* pwm).target = target_level;	
 }
 
-// setup an LED for throb ... throbing is done via ISR
+/* setup an LED for throb ... throbing is done via ISR
+    pwm = analog item affected
+	min_throb = is the minimum value the level goes to. Effect is better if LEDs never actually go off.
+	duration = seconds for the fade
+*/
 void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
 {
 	(* pwm).current_level = 0;
 	(* pwm).duration = duration;	
 	(* pwm).throb = true;	
 	(* pwm).target = LED_FULL_ON;
+	(* pwm).throb_min = min_throb;
 }
 
 // Adjusts the level of an LED
@@ -224,7 +228,11 @@ void set_stepper_current(float current)
 #endif
 
 
-// This is a software driver hard reset using the watchdog timer
+/*
+ This is a software driver hard reset using the watchdog timer
+ Make sure your bootloader is compatible with a WDT.  Some do not reset the WDT
+ and you can get stuck in a WDT reboot loop. 
+ */
 void reset_cpu()
 {
   wdt_enable(WDTO_15MS);
@@ -234,6 +242,19 @@ void reset_cpu()
   }
 }
 
+
+
+/*
+Show the state of all of the ports with switches
+
+A typical response will look like this...
+{Ctl:00000100,Lim:01110000,Prb:00001000}
+
+The 1's represent the port pin high
+
+This is typically used in mfg testing only
+
+*/
 void print_switch_states()
 {
 	printPgmString(PSTR("{Sw:"));

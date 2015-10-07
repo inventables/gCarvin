@@ -41,8 +41,8 @@ void spindle_stop()
   set_pwm(&spindle_motor, 0,SPINDLE_SPINDOWN_RATE);  // fade off spindle
 	
   // LED cross fade
-  set_pwm(&spindle_led, LED_FULL_OFF,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
-  set_pwm(&door_led, LED_FULL_ON,SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
+  set_pwm(&spindle_led, BUTTON_LED_LEVEL_ON, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
+  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
   
   
   
@@ -81,8 +81,8 @@ void spindle_set_state(uint8_t state, float rpm)
   }  
   
 	set_pwm(&spindle_motor, current_pwm,SPINDLE_SPINUP_RATE);  // fade on spindle
-	set_pwm(&spindle_led, LED_FULL_ON,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
-	set_pwm(&door_led, LED_FULL_OFF,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
+	set_pwm(&spindle_led, SPINDLE_LED_LEVEL_RUN,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
+	set_pwm(&door_led, DOOR_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
      
   }
 }

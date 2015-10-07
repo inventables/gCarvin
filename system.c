@@ -228,18 +228,19 @@ uint8_t system_execute_line(char *line)
           break; 
 		#ifdef CARVIN
 		case 'K':
-			tmc26x_init();  // just for testing
-			//reset_cpu();  // hard reset
+			//tmc26x_init();  // just for testing
+			reset_cpu();  // hard reset
 		break;
 		case 'L':
 		    if(line[++char_counter] == '1')
 			{
-				throb_pwm(&button_led, 40,2);
-				throb_pwm(&door_led, 40,2);
-				throb_pwm(&spindle_led, 40,2);
+				throb_pwm(&button_led, BUTTON_LED_THROB_MIN,2);
+				throb_pwm(&door_led, DOOR_LED_THROB_MIN,2);
+				throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
 			}
 			else
 			{
+				//turn all LEDS off
 				set_pwm(&button_led, 0,4);
 				set_pwm(&door_led, 0,4);
 				set_pwm(&spindle_led, 0,4);

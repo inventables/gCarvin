@@ -371,7 +371,7 @@ void protocol_exec_rt_system()
             if (plan_get_current_block() && bit_isfalse(sys.suspend,SUSPEND_MOTION_CANCEL)) {
               sys.suspend = SUSPEND_DISABLE; // Break suspend state.
               sys.state = STATE_CYCLE;
-			  set_pwm(&button_led, 255,3);
+			  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
               st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
               st_wake_up();
             } else { // Otherwise, do nothing. Set and resume IDLE state.
@@ -496,7 +496,7 @@ static void protocol_exec_rt_suspend()
         if (sys.state == STATE_SAFETY_DOOR) {
           if (!(system_check_safety_door_ajar())) {
             sys.state = STATE_HOLD; // Update to HOLD state to indicate door is closed and ready to resume.
-			throb_pwm(&button_led, 40,1);
+			throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
           }
         }
         
