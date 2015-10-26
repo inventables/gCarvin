@@ -65,13 +65,35 @@ void checkControlPins()
   if (pin) { 
     if (bit_istrue(pin,bit(RESET_BIT))) {
       mc_reset();
-    } else if (bit_istrue(pin,bit(CYCLE_START_BIT))) 
-	{
+    } 
 	
-	  if (sys.state == STATE_HOLD)	// this allows the button to act as a door open
-		bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
-	  else if (sys.state != STATE_IDLE)
-		bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+	
+	else if (bit_istrue(pin,bit(CYCLE_START_BIT))) //the front button
+	{	
+	   
+		
+	   if (sys.state != STATE_IDLE)  // button only does something when not in idle
+	   {
+			if (sys.state == STATE_HOLD)
+			{		
+				
+				if (bit_istrue(sys.suspend, SUSPEND_INITIATE_RESTORE))
+				{					
+					bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+				}
+				else
+				{					
+					bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
+			    }
+			}
+			else
+			{
+				bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
+			}			
+			
+	   }
+		
+	  
 	
   
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
