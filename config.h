@@ -171,7 +171,8 @@
 // the control pin port (0 (low) or 1(high)), masked to show only the input pins. Non-control pins on the 
 // port will always show a 0 value. See cpu_map.h for the pin bitmap. As with the limit pin reporting,
 // we do not recommend keeping this option enabled. Try to only use this for setting up a new CNC.
-// #define REPORT_CONTROL_PIN_STATE // Default disabled. Uncomment to enable.
+#define REPORT_CONTROL_PIN_STATE // Default disabled. Uncomment to enable.
+#define REPORT_PROBE_PIN
 
 // When Grbl powers-cycles or is hard reset with the Arduino reset button, Grbl boots up with no ALARM
 // by default. This is to make it as simple as possible for new users to start using Grbl. When homing

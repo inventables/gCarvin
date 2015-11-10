@@ -104,6 +104,22 @@ void settings_restore(uint8_t restore_flag) {
 	float coord_data[N_AXIS];
 	memset(&coord_data, 0, sizeof(coord_data));
 	for (idx=0; idx <= SETTING_INDEX_NCOORD; idx++) { settings_write_coord_data(idx, coord_data); }
+	
+#ifdef CARVIN	
+	
+	// default to a reasonable location for G28 and G30
+	
+	coord_data[X_AXIS] = DEFAULT_G28_X;
+	coord_data[Y_AXIS] = DEFAULT_G28_Y;
+	coord_data[Z_AXIS] = DEFAULT_G28_Z;	
+	settings_write_coord_data(SETTING_INDEX_G28,coord_data);
+	
+	coord_data[X_AXIS] = DEFAULT_G30_X;
+	coord_data[Y_AXIS] = DEFAULT_G30_Y;
+	coord_data[Z_AXIS] = DEFAULT_G30_Z;	
+	settings_write_coord_data(SETTING_INDEX_G30,coord_data);
+	
+#endif	
   }
   
   if (restore_flag & SETTINGS_RESTORE_STARTUP_LINES) {

@@ -22,8 +22,8 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "1.0.11" // added idle current reduction
-#define GRBL_VERSION_BUILD "20151026"
+#define GRBL_VERSION "1.1.1" // changed method of reporting switches
+#define GRBL_VERSION_BUILD "20151109"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>

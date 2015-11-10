@@ -41,7 +41,7 @@ void spindle_stop()
   set_pwm(&spindle_motor, 0,SPINDLE_SPINDOWN_RATE);  // fade off spindle
 	
   // LED cross fade
-  set_pwm(&spindle_led, BUTTON_LED_LEVEL_ON, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
+  set_pwm(&spindle_led, 0, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
   set_pwm(&door_led, DOOR_LED_LEVEL_IDLE, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
   
   

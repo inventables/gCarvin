@@ -188,6 +188,12 @@
 
 #endif
 
-
+	#define DEFAULT_G28_X  -282.5
+	#define DEFAULT_G28_Y  -199.5
+	#define DEFAULT_G28_Z  -1.0
+	
+	#define DEFAULT_G30_X  -150.0
+	#define DEFAULT_G30_Y  -10.0
+	#define DEFAULT_G30_Z  -1.0
 
 #endif
