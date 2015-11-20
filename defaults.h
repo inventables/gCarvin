@@ -34,7 +34,7 @@
   #define DEFAULT_Z_STEPS_PER_MM 377.893  // or 5120 (for older m8 rods)
   #define DEFAULT_X_MAX_RATE 3000.0 // mm/min
   #define DEFAULT_Y_MAX_RATE 3000.0 // mm/min
-  #define DEFAULT_Z_MAX_RATE 200.0 // mm/min
+  #define DEFAULT_Z_MAX_RATE 300.0 // mm/min
   #define DEFAULT_X_ACCELERATION (300.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2
   #define DEFAULT_Y_ACCELERATION (300.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2
   #define DEFAULT_Z_ACCELERATION (40.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2

@@ -371,13 +371,15 @@ void protocol_exec_rt_system()
             if (plan_get_current_block() && bit_isfalse(sys.suspend,SUSPEND_MOTION_CANCEL)) {
               sys.suspend = SUSPEND_DISABLE; // Break suspend state.
               sys.state = STATE_CYCLE;
-			  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+			  
               st_prep_buffer(); // Initialize step segment buffer before beginning cycle.
               st_wake_up();
             } else { // Otherwise, do nothing. Set and resume IDLE state.
               sys.suspend = SUSPEND_DISABLE; // Break suspend state.
               sys.state = STATE_IDLE;
+			  
             }
+			set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
           }
         }
       }    

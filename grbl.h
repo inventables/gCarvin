@@ -22,8 +22,8 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "1.1.1" // changed method of reporting switches
-#define GRBL_VERSION_BUILD "20151109"
+#define GRBL_VERSION "1.1.3" // changed method of reporting switches...changed z speed to 300  // fixed blink on button
+#define GRBL_VERSION_BUILD "20151120"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
