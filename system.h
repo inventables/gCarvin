@@ -76,7 +76,19 @@
 #define STEP_CONTROL_EXECUTE_HOLD           bit(2)
 #define STEP_CONTROL_EXECUTE_PARK           bit(3)
 
-
+// Define control pin index for Grbl internal use. Pin maps may change, but these values don't.
+#ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+  #define N_CONTROL_PIN 4
+  #define CONTROL_PIN_INDEX_SAFETY_DOOR   bit(0)
+  #define CONTROL_PIN_INDEX_RESET         bit(1)
+  #define CONTROL_PIN_INDEX_FEED_HOLD     bit(2)
+  #define CONTROL_PIN_INDEX_CYCLE_START   bit(3)
+#else
+  #define N_CONTROL_PIN 3
+  #define CONTROL_PIN_INDEX_RESET         bit(0)
+  #define CONTROL_PIN_INDEX_FEED_HOLD     bit(1)
+  #define CONTROL_PIN_INDEX_CYCLE_START   bit(2)
+#endif
 
 // Define global system variables
 typedef struct {
@@ -101,6 +113,9 @@ extern system_t sys;
 
 // Initialize the serial protocol
 void system_init();
+
+// Returns bitfield of control pin states, organized by CONTROL_PIN_INDEX. (1=triggered, 0=not triggered).
+uint8_t system_control_get_state();
 
 // Returns if safety door is open or closed, based on pin state.
 uint8_t system_check_safety_door_ajar();

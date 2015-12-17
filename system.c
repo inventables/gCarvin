@@ -34,6 +34,27 @@ void system_init()
   PCICR |= (1 << CONTROL_INT);   // Enable Pin Change Interrupt
 }
 
+// Returns control pin state as a uint8 bitfield. Each bit indicates the input pin state, where 
+// triggered is 1 and not triggered is 0. Invert mask is applied. Bitfield organization is
+// defined by the CONTROL_PIN_INDEX in the header file.
+uint8_t system_control_get_state()
+{
+  uint8_t control_state = 0;
+  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
+  #ifndef INVERT_ALL_CONTROL_PINS
+    pin ^= CONTROL_INVERT_MASK;
+  #endif
+  if (pin) {
+    #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+      if (bit_istrue(pin,(1<<SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
+    #endif
+    if (bit_istrue(pin,(1<<RESET_BIT))) { control_state |= CONTROL_PIN_INDEX_RESET; }
+    if (bit_istrue(pin,(1<<FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
+    if (bit_istrue(pin,(1<<CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
+  }
+  return(control_state);
+}
+
 
 // Pin change interrupt for pin-out commands, i.e. cycle start, feed hold, and reset. Sets
 // only the realtime command execute variable to have the main program execute these when 
@@ -57,8 +78,8 @@ void checkControlPins()
   uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
   
   // if some are inverted logic pins they need flipped
-  #ifdef INVERT_CONTROL_MASK
-    pin ^= INVERT_CONTROL_MASK;
+  #ifdef CONTROL_INVERT_MASK
+    pin ^= CONTROL_INVERT_MASK;
   #endif
   
   // Enter only if any CONTROL pin is detected as active.
@@ -92,9 +113,7 @@ void checkControlPins()
 			}			
 			
 	   }
-		
-	  
-	
+
   
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
     } else if (bit_istrue(pin,bit(FEED_HOLD_BIT)))
@@ -109,6 +128,10 @@ void checkControlPins()
   }
 }
 
+
+
+
+/*
 
 // Returns if safety door is ajar(T) or closed(F), based on pin state.
 uint8_t system_check_safety_door_ajar()
@@ -129,6 +152,19 @@ uint8_t system_check_safety_door_ajar()
   #endif
   
   
+}
+
+*/
+
+
+// Returns if safety door is ajar(T) or closed(F), based on pin state.
+uint8_t system_check_safety_door_ajar()
+{
+  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+    return(system_control_get_state() & CONTROL_PIN_INDEX_SAFETY_DOOR);
+  #else
+    return(false); // Input pin not enabled, so just return that it's closed.
+  #endif
 }
 
 
