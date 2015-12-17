@@ -140,7 +140,7 @@
 
 // After the safety door switch has been toggled and restored, this setting sets the power-up delay
 // between restoring the spindle and coolant and resuming the cycle.
-#define SAFETY_DOOR_SPINDLE_DELAY 4.0 // Float (seconds)
+#define SAFETY_DOOR_SPINDLE_DELAY 1.0 // Float (seconds)
 #define SAFETY_DOOR_COOLANT_DELAY 1.0 // Float (seconds)
 
 // Enable CoreXY kinematics. Use ONLY with CoreXY machines. 
@@ -418,7 +418,7 @@
 #define PARKING_AXIS Z_AXIS // Define which axis that performs the parking motion
 #define PARKING_TARGET -5.0 // Parking axis target. In mm, as machine coordinate [-max_travel,0].
 #define PARKING_RATE -1.0 // Parking fast rate after pull-out. In mm/min or (-1.0) for seek rate.
-#define PARKING_PULLOUT_RATE 250.0 // Pull-out/plunge slow feed rate in mm/min.
+#define PARKING_PULLOUT_RATE 500.0 // Pull-out/plunge slow feed rate in mm/min.
 #define PARKING_PULLOUT_INCREMENT 5.0 // Spindle pull-out and plunge distance in mm. Incremental distance.
                                       // Must be positive value or equal to zero.
 
