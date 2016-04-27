@@ -22,6 +22,9 @@
 #define DOOR_LED_LEVEL_RUN 100
 #define DOOR_LED_THROB_MIN 60
 
+#define DOOR_SLEEP_THROB_RATE 4  // define how the sleep throb looks
+#define DOOR_SLEEP_THROB_MIN 5
+
 #define SPINDLE_LED_LEVEL_IDLE 0
 #define SPINDLE_LED_LEVEL_RUN 255
 #define SPINDLE_LED_THROB_MIN 60
@@ -35,7 +38,11 @@
 
 #define CONTROL_DEBOUNCE_COUNT 8 // this is count down by timer5
 
+#define CARVIN_IDLE_REDUCTION   // if this is true it will reduce current in idle mode
+
 extern int control_button_counter;  // Used to debounce the control button.
+int use_door_feature;  // Used to debounce the control button.
+int use_sleep_feature; // Use to disable the sleep feature temporariliy'
 
 struct pwm_analog{
   unsigned char target;        // what is the desired brightness
