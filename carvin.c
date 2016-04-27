@@ -18,7 +18,8 @@ int control_button_counter = 0;  // initialize this for use in button debouncing
 void carvin_init()
 {
   
-	
+  use_door_feature = true;
+  use_sleep_feature = true;
  
   
   // setup the PWM pins as outputs
@@ -26,17 +27,8 @@ void carvin_init()
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
   
- 
-  #ifdef GEN1_HARDWARE
-    STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
-	set_stepper_current(0);
-  #endif
-  
-  #ifdef GEN2_HARDWARE
-	tmc26x_init();  // SPI functions to program the chips
-  #endif
-	
 
+  tmc26x_init();  // SPI functions to program the chips
   
 	// -------------- Setup PWM on Timer 4 ------------------------------
 	
@@ -88,14 +80,7 @@ void carvin_init()
   set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
   set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
 	
-	// set the stepper currents
-	#ifdef GEN1_HARDWARE
-		set_stepper_current(STEPPER_RUN_CURRENT);
-	#endif
-	
-	#ifdef GEN2_HARDWARE
-		//setTMC26xRunCurrent(0); // not run current yet TOD0 Debugging motors
-	#endif
+  setTMC26xRunCurrent(1);
 	
 }
 
@@ -145,6 +130,7 @@ void init_pwm(struct pwm_analog * pwm)
 // setup an LED with a new brightness level ... change is done via ISR
 void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 {
+	
 	(* pwm).duration = duration;
 	(* pwm).throb = false;
 	(* pwm).target = target_level;	
@@ -156,7 +142,7 @@ void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 	duration = seconds for the fade
 */
 void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
-{
+{		
 	(* pwm).current_level = 0;
 	(* pwm).duration = duration;	
 	(* pwm).throb = true;	

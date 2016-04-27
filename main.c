@@ -37,7 +37,7 @@ int main(void)
   stepper_init();  // Configure stepper pins and interrupt timers
   system_init();   // Configure pinout pins and pin-change interrupt
   
-  memset(&sys, 0, sizeof(sys));  // Clear all system variables
+  memset(&sys, 0, sizeof(system_t));  // Clear all system variables
   sys.abort = true;   // Set abort to complete initialization
   sei(); // Enable interrupts
 
@@ -71,6 +71,7 @@ int main(void)
     coolant_init();
     limits_init(); 
     probe_init();
+    sleep_init();
     plan_reset(); // Clear block buffer and planner variables
     st_reset(); // Clear stepper subsystem variables.
 
@@ -80,9 +81,10 @@ int main(void)
 
     // Reset system variables.
     sys.abort = false;
-    sys.rt_exec_state = 0;
-    sys.rt_exec_alarm = 0;
+    sys_rt_exec_state = 0;
+    sys_rt_exec_alarm = 0;
     sys.suspend = false;
+    sys.soft_limit = false;
           
     // Start Grbl main loop. Processes program inputs and executes them.
     protocol_main_loop();

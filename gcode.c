@@ -40,7 +40,7 @@ parser_block_t gc_block;
 
 void gc_init() 
 {
-  memset(&gc_state, 0, sizeof(gc_state));
+  memset(&gc_state, 0, sizeof(parser_state_t));
   
   // Load default G54 coordinate system.
   if (!(settings_read_coord_data(gc_state.modal.coord_select,gc_state.coord_system))) { 
@@ -80,7 +80,7 @@ uint8_t gc_execute_line(char *line)
      values struct, word tracking variables, and a non-modal commands tracker for the new 
      block. This struct contains all of the necessary information to execute the block. */
      
-  memset(&gc_block, 0, sizeof(gc_block)); // Initialize the parser block struct.
+  memset(&gc_block, 0, sizeof(parser_block_t)); // Initialize the parser block struct.
   memcpy(&gc_block.modal,&gc_state.modal,sizeof(gc_modal_t)); // Copy current modes
   uint8_t axis_command = AXIS_COMMAND_NONE;
   uint8_t axis_0, axis_1, axis_linear;
@@ -286,28 +286,18 @@ uint8_t gc_execute_line(char *line)
               case 2: case 30: gc_block.modal.program_flow = PROGRAM_FLOW_COMPLETED; break; // Program end and reset 
             }
             break;
-          #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
-            case 4: 
-          #endif
-          case 3: case 5:
+          case 4: case 3: case 5:
             word_bit = MODAL_GROUP_M7; 
             switch(int_value) {
               case 3: gc_block.modal.spindle = SPINDLE_ENABLE_CW; break;
-              #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
-                case 4: gc_block.modal.spindle = SPINDLE_ENABLE_CCW; break;
-              #endif
+              case 4: gc_block.modal.spindle = SPINDLE_ENABLE_CCW; break;
               case 5: gc_block.modal.spindle = SPINDLE_DISABLE; break;
             }
             break;            
-         #ifdef ENABLE_M7  
-          case 7:
-         #endif
-          case 8: case 9:
+          case 7: case 8: case 9:
             word_bit = MODAL_GROUP_M8; 
             switch(int_value) {      
-             #ifdef ENABLE_M7
               case 7: gc_block.modal.coolant = COOLANT_MIST_ENABLE; break;
-             #endif
               case 8: gc_block.modal.coolant = COOLANT_FLOOD_ENABLE; break;
               case 9: gc_block.modal.coolant = COOLANT_DISABLE; break;
             }
@@ -615,19 +605,26 @@ uint8_t gc_execute_line(char *line)
           
       // Check remaining non-modal commands for errors.
       switch (gc_block.non_modal_command) {        
-        case NON_MODAL_GO_HOME_0: 
-          // [G28 Errors]: Cutter compensation is enabled. 
-          // Retreive G28 go-home position data (in machine coordinates) from EEPROM
-          if (!axis_words) { axis_command = AXIS_COMMAND_NONE; } // Set to none if no intermediate motion.
-          if (!settings_read_coord_data(SETTING_INDEX_G28,parameter_data)) { FAIL(STATUS_SETTING_READ_FAIL); }
+        case NON_MODAL_GO_HOME_0: // G28
+        case NON_MODAL_GO_HOME_1: // G30
+          // [G28/30 Errors]: Cutter compensation is enabled. 
+          // Retreive G28/30 go-home position data (in machine coordinates) from EEPROM
+          if (gc_block.non_modal_command == NON_MODAL_GO_HOME_0) {
+            if (!settings_read_coord_data(SETTING_INDEX_G28,parameter_data)) { FAIL(STATUS_SETTING_READ_FAIL); }
+          } else { // == NON_MODAL_GO_HOME_1
+            if (!settings_read_coord_data(SETTING_INDEX_G30,parameter_data)) { FAIL(STATUS_SETTING_READ_FAIL); }
+          }
+          if (axis_words) { 
+            // Move only the axes specified in secondary move.
+            for (idx=0; idx<N_AXIS; idx++) {
+              if (!(axis_words & (1<<idx))) { parameter_data[idx] = gc_state.position[idx]; }
+            }
+          } else {
+            axis_command = AXIS_COMMAND_NONE; // Set to none if no intermediate motion.
+          }
           break;
-        case NON_MODAL_GO_HOME_1:
-          // [G30 Errors]: Cutter compensation is enabled. 
-          // Retreive G30 go-home position data (in machine coordinates) from EEPROM
-          if (!axis_words) { axis_command = AXIS_COMMAND_NONE; } // Set to none if no intermediate motion.
-          if (!settings_read_coord_data(SETTING_INDEX_G30,parameter_data)) { FAIL(STATUS_SETTING_READ_FAIL); }
-          break;
-        case NON_MODAL_SET_HOME_0: case NON_MODAL_SET_HOME_1:
+        case NON_MODAL_SET_HOME_0: // G28.1
+        case NON_MODAL_SET_HOME_1: // G30.1
           // [G28.1/30.1 Errors]: Cutter compensation is enabled. 
           // NOTE: If axis words are passed here, they are interpreted as an implicit motion mode.
           break;
@@ -924,17 +921,9 @@ uint8_t gc_execute_line(char *line)
       // Move to intermediate position before going home. Obeys current coordinate system and offsets 
       // and absolute and incremental modes.
       if (axis_command) {
-        #ifdef USE_LINE_NUMBERS
-          mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
-        #else
-          mc_line(gc_block.values.xyz, -1.0, false);
-        #endif
+        mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
       }
-      #ifdef USE_LINE_NUMBERS
-        mc_line(parameter_data, -1.0, false, gc_state.line_number); 
-      #else
-        mc_line(parameter_data, -1.0, false); 
-      #endif
+      mc_line(parameter_data, -1.0, false, gc_state.line_number); 
       memcpy(gc_state.position, parameter_data, sizeof(parameter_data));
       break;
     case NON_MODAL_SET_HOME_0: 
@@ -960,66 +949,32 @@ uint8_t gc_execute_line(char *line)
     if (axis_command == AXIS_COMMAND_MOTION_MODE) {
       switch (gc_state.modal.motion) {
         case MOTION_MODE_SEEK:
-          #ifdef USE_LINE_NUMBERS
-            mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
-          #else
-            mc_line(gc_block.values.xyz, -1.0, false);
-          #endif
+          mc_line(gc_block.values.xyz, -1.0, false, gc_state.line_number);
           break;
         case MOTION_MODE_LINEAR:
-          #ifdef USE_LINE_NUMBERS
-            mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, gc_state.line_number);
-          #else
-            mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate);
-          #endif
+          mc_line(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, gc_state.line_number);
           break;
         case MOTION_MODE_CW_ARC: 
-          #ifdef USE_LINE_NUMBERS
-            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, true, gc_state.line_number);  
-          #else
-            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, true); 
-          #endif
+          mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
+            gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, true, gc_state.line_number);  
           break;        
         case MOTION_MODE_CCW_ARC:
-          #ifdef USE_LINE_NUMBERS
-            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, false, gc_state.line_number);  
-          #else
-            mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
-              gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, false); 
-          #endif
+          mc_arc(gc_state.position, gc_block.values.xyz, gc_block.values.ijk, gc_block.values.r, 
+            gc_state.feed_rate, gc_state.modal.feed_rate, axis_0, axis_1, axis_linear, false, gc_state.line_number);  
           break;
         case MOTION_MODE_PROBE_TOWARD: 
           // NOTE: gc_block.values.xyz is returned from mc_probe_cycle with the updated position value. So
           // upon a successful probing cycle, the machine position and the returned value should be the same.
-          #ifdef USE_LINE_NUMBERS
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, false, gc_state.line_number);
-          #else
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, false);
-          #endif
+          mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, false, gc_state.line_number);
           break;
         case MOTION_MODE_PROBE_TOWARD_NO_ERROR:
-          #ifdef USE_LINE_NUMBERS
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, true, gc_state.line_number);
-          #else
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, true);
-          #endif
+          mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, false, true, gc_state.line_number);
           break;
         case MOTION_MODE_PROBE_AWAY:
-          #ifdef USE_LINE_NUMBERS
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, false, gc_state.line_number);
-          #else
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, false);
-          #endif
+          mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, false, gc_state.line_number);
           break;
         case MOTION_MODE_PROBE_AWAY_NO_ERROR:
-          #ifdef USE_LINE_NUMBERS
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, true, gc_state.line_number);
-          #else        
-            mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, true);
-          #endif
+          mc_probe_cycle(gc_block.values.xyz, gc_state.feed_rate, gc_state.modal.feed_rate, true, true, gc_state.line_number);
       }
     
       // As far as the parser is concerned, the position is now == target. In reality the
@@ -1034,37 +989,37 @@ uint8_t gc_execute_line(char *line)
   // refill and can only be resumed by the cycle start run-time command.
   gc_state.modal.program_flow = gc_block.modal.program_flow;
   if (gc_state.modal.program_flow) { 
-	protocol_buffer_synchronize(); // Sync and finish all remaining buffered motions before moving on.
-	if (gc_state.modal.program_flow == PROGRAM_FLOW_PAUSED) {
-	  if (sys.state != STATE_CHECK_MODE) {
-		bit_true_atomic(sys.rt_exec_state, EXEC_FEED_HOLD); // Use feed hold for program pause.
-		protocol_execute_realtime(); // Execute suspend.
-	  }
-	} else { // == PROGRAM_FLOW_COMPLETED
-	  // Upon program complete, only a subset of g-codes reset to certain defaults, according to 
-	  // LinuxCNC's program end descriptions and testing. Only modal groups [G-code 1,2,3,5,7,12]
-	  // and [M-code 7,8,9] reset to [G1,G17,G90,G94,G40,G54,M5,M9,M48]. The remaining modal groups
-	  // [G-code 4,6,8,10,13,14,15] and [M-code 4,5,6] and the modal words [F,S,T,H] do not reset.
-	  gc_state.modal.motion = MOTION_MODE_LINEAR;
-	  gc_state.modal.plane_select = PLANE_SELECT_XY;
-	  gc_state.modal.distance = DISTANCE_MODE_ABSOLUTE;
-	  gc_state.modal.feed_rate = FEED_RATE_MODE_UNITS_PER_MIN;
-	  // gc_state.modal.cutter_comp = CUTTER_COMP_DISABLE; // Not supported.
-	  gc_state.modal.coord_select = 0; // G54
-	  gc_state.modal.spindle = SPINDLE_DISABLE;
-	  gc_state.modal.coolant = COOLANT_DISABLE;
-	  // gc_state.modal.override = OVERRIDE_DISABLE; // Not supported.
-	  
-	  // Execute coordinate change and spindle/coolant stop.
-	  if (sys.state != STATE_CHECK_MODE) {
-		if (!(settings_read_coord_data(gc_state.modal.coord_select,coordinate_data))) { FAIL(STATUS_SETTING_READ_FAIL); } 
-		memcpy(gc_state.coord_system,coordinate_data,sizeof(coordinate_data));
-		spindle_stop();
-		coolant_stop();		
-	  }
-	  
-	  report_feedback_message(MESSAGE_PROGRAM_END);
-	}
+    protocol_buffer_synchronize(); // Sync and finish all remaining buffered motions before moving on.
+    if (gc_state.modal.program_flow == PROGRAM_FLOW_PAUSED) {
+      if (sys.state != STATE_CHECK_MODE) {
+        system_set_exec_state_flag(EXEC_FEED_HOLD); // Use feed hold for program pause.
+        protocol_execute_realtime(); // Execute suspend.
+      }
+    } else { // == PROGRAM_FLOW_COMPLETED
+      // Upon program complete, only a subset of g-codes reset to certain defaults, according to 
+      // LinuxCNC's program end descriptions and testing. Only modal groups [G-code 1,2,3,5,7,12]
+      // and [M-code 7,8,9] reset to [G1,G17,G90,G94,G40,G54,M5,M9,M48]. The remaining modal groups
+      // [G-code 4,6,8,10,13,14,15] and [M-code 4,5,6] and the modal words [F,S,T,H] do not reset.
+      gc_state.modal.motion = MOTION_MODE_LINEAR;
+      gc_state.modal.plane_select = PLANE_SELECT_XY;
+      gc_state.modal.distance = DISTANCE_MODE_ABSOLUTE;
+      gc_state.modal.feed_rate = FEED_RATE_MODE_UNITS_PER_MIN;
+      // gc_state.modal.cutter_comp = CUTTER_COMP_DISABLE; // Not supported.
+      gc_state.modal.coord_select = 0; // G54
+      gc_state.modal.spindle = SPINDLE_DISABLE;
+      gc_state.modal.coolant = COOLANT_DISABLE;
+      // gc_state.modal.override = OVERRIDE_DISABLE; // Not supported.
+    
+      // Execute coordinate change and spindle/coolant stop.
+      if (sys.state != STATE_CHECK_MODE) {
+        if (!(settings_read_coord_data(gc_state.modal.coord_select,coordinate_data))) { FAIL(STATUS_SETTING_READ_FAIL); } 
+        memcpy(gc_state.coord_system,coordinate_data,sizeof(coordinate_data));
+        spindle_stop();
+        coolant_stop();		
+      }
+    
+      report_feedback_message(MESSAGE_PROGRAM_END);
+    }
     gc_state.modal.program_flow = PROGRAM_FLOW_RUNNING; // Reset program flow.
   }
     
