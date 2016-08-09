@@ -414,7 +414,7 @@
 // well. While in sleep mode, only a hard/soft reset will exit it and the job will be unrecoverable.
 // NOTE: Sleep mode is a safety feature, primarily to address communication disconnect problems. To 
 // keep Grbl from sleeping, employ a stream of '?' status report commands as a connection "heartbeat".
-#define SLEEP_ENABLE  // Default disabled. Uncomment to enable.
+//#define SLEEP_ENABLE  // Default disabled. Uncomment to enable.
 #define SLEEP_DURATION 2.0 // Float (0.25 - 61.0) seconds before sleep mode is executed.
 
 
@@ -492,6 +492,21 @@
 #define DOOR_LED_BIT     4   // what bit on the port is it?
 #define DOOR_LED_OCR     OCR4B // the value of the duty cycle
 #define DOOR_LED_MAX     1023
+
+
+// this is used for the hardware ID function
+// These pins are hardwired to either Gnd or 5V 
+// Each new rev of hardware gets a new ID
+#define HRDW_ID_DDR	     DDRC
+#define HRDW_ID_PORT     PORTC
+#define HRDW_ID_PIN      PINC
+#define HRDW_ID_0	     3 		
+#define HRDW_ID_1        4
+#define HRDW_ID_2        5
+#define HRDW_ID_3        6
+#define HRDW_ID_4        7
+#define HRDW_ID_MASK     (1<<HRDW_ID_0 | 1<<HRDW_ID_1 | 1<<HRDW_ID_2 | 1<<HRDW_ID_3 | 1<<HRDW_ID_4) 
+
 
 #define SPINDLE_LED_DDR     DDRH
 #define SPINDLE_LED_PORT    PORTH
@@ -623,5 +638,6 @@
 #define DEFAULT_HOMING_SEEK_RATE 1500.0 // mm/min
 #define DEFAULT_HOMING_DEBOUNCE_DELAY 250 // msec (0-65k)
 #define DEFAULT_HOMING_PULLOFF 4.0 // mm
+#define DEFAULT_SPINDLE_I_MAX 1.1 // Amps
 
 #endif

@@ -287,6 +287,9 @@ void protocol_exec_rt_system()
         if (sys.state == STATE_CYCLE) {
           st_update_plan_block_parameters(); // Notify stepper module to recompute for hold deceleration.
           sys.step_control = STEP_CONTROL_EXECUTE_HOLD; // Initiate suspend state with active flag.
+		  if(rt_exec & EXEC_SAFETY_DOOR) {
+				set_pwm(&spindle_motor, 0, 0);  // added by Brian R.
+		  }
         }
         // If IDLE, Grbl is not in motion. Simply indicate suspend state and hold is complete.
         if (sys.state == STATE_IDLE) { 

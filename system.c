@@ -62,7 +62,10 @@ ISR(CONTROL_INT_vect)
 {
   #ifdef CARVIN
 	/* Carvey has to deal with the button differently because the front button
-	   does two function hold/reset and therefore needs to be debounced
+	   does two functions hold/reset and therefore needs to be debounced
+		 
+		 ISR(TIMER5_COMPA_vect) // will do the debounce
+		 
 	*/
 	control_button_counter = CONTROL_DEBOUNCE_COUNT;  // the inital count is set here
 	return;
@@ -75,7 +78,7 @@ ISR(CONTROL_INT_vect)
     } else if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) {
       bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
     } else if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
-      bit_true(sys_rt_exec_state, EXEC_FEED_HOLD); 
+      bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
     } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
       bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
     } 
@@ -92,7 +95,7 @@ void checkControlPins()
 		The front button
 			Does nothing in IDLE
 			Does Cycle Start when in hold
-			Does hold when not in hold		
+			Does hold when not in hold
 			
 			
   */	
@@ -125,7 +128,8 @@ void checkControlPins()
 		}
 		else
 		{
-			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);			
+			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+			printPgmString(PSTR("[Do Door]\r\n"));
 		}
 	  }
 	  
@@ -134,7 +138,9 @@ void checkControlPins()
 	} 
 	else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR))
 	{	
-      bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+      //bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+			bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
+			printPgmString(PSTR("[FEED HOLD]\r\n"));
     } 
   }
 	
@@ -147,8 +153,8 @@ void checkControlPins()
 uint8_t system_check_safety_door_ajar()
 {
 	#ifdef CARVIN
-		if (! use_door_feature)
-			return false;
+		//if (! use_door_feature)
+			//return false;
 	#endif
     return(system_control_get_state() & CONTROL_PIN_INDEX_SAFETY_DOOR);
 	
@@ -291,16 +297,16 @@ uint8_t system_execute_line(char *line)
 				set_pwm(&spindle_led, 0,4);
 			}
 		break;
+		
 		case 'D':
-			use_door_feature = (! use_door_feature);
-			use_sleep_feature = (! use_sleep_feature);
-			printPgmString(PSTR("[Door Feature "));
-			print_uint8_base10(use_door_feature);
+			
+			use_sleep_feature = (! use_sleep_feature);			
 			printPgmString(PSTR(" Sleep Feature "));
 			print_uint8_base10(use_sleep_feature);
 			printPgmString(PSTR(" ]\r\n"));			
 			
 		break;
+		
 		case 'S':
 			print_switch_states();
 		break;

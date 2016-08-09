@@ -38,11 +38,24 @@
 
 #define CONTROL_DEBOUNCE_COUNT 8 // this is count down by timer5
 
+// scale 2.56V = 1023 on ADC
+#define SPINDLE_I_REV 1     // what hardware rev has the spindle current feature
+#define SPINDLE_I_COUNT 10 // in the 512Hz interrupt this will get us 51.2Hz current readings
+#define SPINDLE_I_MULTIPLIER 256ul
+#define SPINDLE_I_AVG_CONST 252ul // the constant used to average the current
+#define SPINDLE_I_THRESHOLD 410 // ADC value we want to trip at 
+
+
+
 #define CARVIN_IDLE_REDUCTION   // if this is true it will reduce current in idle mode
 
 extern int control_button_counter;  // Used to debounce the control button.
-int use_door_feature;  // Used to debounce the control button.
+
 int use_sleep_feature; // Use to disable the sleep feature temporariliy'
+int hardware_rev;
+uint16_t spindle_current;
+uint16_t spindle_I_max;
+uint8_t spindle_current_counter;
 
 struct pwm_analog{
   unsigned char target;        // what is the desired brightness
@@ -65,6 +78,8 @@ int pwm_level_change(struct pwm_analog * led);  // checks to see if a level chan
 void print_switch_states();
 
 void reset_cpu();   // software full reset of the CPU
+
+uint8_t get_hardware_rev();  // return the hardware rev number
 
 // the LEDs
 struct pwm_analog button_led;

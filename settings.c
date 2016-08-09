@@ -95,6 +95,9 @@ void settings_restore(uint8_t restore_flag) {
     settings.max_travel[X_AXIS] = (-DEFAULT_X_MAX_TRAVEL);
     settings.max_travel[Y_AXIS] = (-DEFAULT_Y_MAX_TRAVEL);
     settings.max_travel[Z_AXIS] = (-DEFAULT_Z_MAX_TRAVEL);    
+	
+	settings.spindle_over_I_max = DEFAULT_SPINDLE_I_MAX;
+	   spindle_I_max = settings.spindle_over_I_max;
 
     write_global_settings();
   }
@@ -285,6 +288,11 @@ uint8_t settings_store_global_setting(uint8_t parameter, float value) {
       case 27: settings.homing_pulloff = value; break;
       case 30: settings.rpm_max = value; break;
       case 31: settings.rpm_min = value; break;
+	  case 50: 
+	    if (value > 3.0) value = 3.0;
+	    settings.spindle_over_I_max = value; 	    
+		spindle_I_max = settings.spindle_over_I_max * (1023.0/2.56);
+		break;
       default: 
         return(STATUS_INVALID_STATEMENT);
     }

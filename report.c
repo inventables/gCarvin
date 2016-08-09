@@ -207,6 +207,7 @@ void report_grbl_settings() {
     printPgmString(PSTR("\r\n$27=")); printFloat_SettingValue(settings.homing_pulloff);
     printPgmString(PSTR("\r\n$30=")); printFloat_RPMValue(settings.rpm_max);
     printPgmString(PSTR("\r\n$31=")); printFloat_RPMValue(settings.rpm_min);
+	printPgmString(PSTR("\r\n$50=")); printFloat(settings.spindle_over_I_max,2);
     printPgmString(PSTR("\r\n"));
   #else      
     printPgmString(PSTR("$0=")); print_uint8_base10(settings.pulse_microseconds);
@@ -235,6 +236,11 @@ void report_grbl_settings() {
     printPgmString(PSTR(" (homing pull-off, mm)\r\n$30=")); printFloat_RPMValue(settings.rpm_max);
     printPgmString(PSTR(" (rpm max)\r\n$31=")); printFloat_RPMValue(settings.rpm_min);
     printPgmString(PSTR(" (rpm min)\r\n"));
+	
+	printPgmString(PSTR("$50="));
+	printFloat(settings.spindle_over_I_max,2);
+	printPgmString(PSTR(" (Spindle I max)\r\n"));
+	
   #endif
   
   // Print axis settings
@@ -403,13 +409,22 @@ void report_startup_line(uint8_t n, char *line)
   printPgmString(PSTR("\r\n"));
 }
 
-
 // Prints build info line
 void report_build_info(char *line)
 {
   printPgmString(PSTR("[" GRBL_VERSION "." GRBL_VERSION_BUILD ":"));
   printString(line);
+  //printPgmString(PSTR("]\r\n"));
+  
+  //TO DO Sync with the dev team on this
+  printPgmString(PSTR(":CTRL"));
+  print_uint8_base10(hardware_rev);
   printPgmString(PSTR("]\r\n"));
+  
+  
+  
+  
+  
 }
 
 
@@ -543,6 +558,12 @@ void report_realtime_status()
         print_unsigned_int8(limits_get_state(),2,N_AXIS);
       }
     #endif
+	
+	// Returns the number of active blocks are in the planner buffer.
+    if (bit_istrue(settings.status_report_mask,BITFLAG_RT_STATUS_SPINDLE_I)) {
+      printPgmString(PSTR(",I:"));
+      printFloat((float)(spindle_current) * 2.56 / 1023, 2);
+    }
   
   #else
     // -----------------------------------

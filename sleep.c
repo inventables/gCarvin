@@ -102,6 +102,7 @@ void sleep_check()
   // has any powered components enabled.
   // NOTE: With overrides or in laser mode, modal spindle and coolant state are not guaranteed. Need 
   // to directly monitor and record running state during parking to ensure proper function.
+  
   if (! use_sleep_feature)
 		return;
   
