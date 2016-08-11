@@ -16,7 +16,7 @@ int control_button_counter = 0;  // initialize this for use in button debouncing
 void carvin_init()
 {
   
-  
+  use_sleep_feature = true;
  
   // setup the hardware I.D. 
   HRDW_ID_DDR &= ~(HRDW_ID_MASK);  // make pins inputs

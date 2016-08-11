@@ -190,6 +190,7 @@ uint8_t read_global_settings() {
     if (!(memcpy_from_eeprom_with_checksum((char*)&settings, EEPROM_ADDR_GLOBAL, sizeof(settings_t)))) {
       return(false);
     }
+	
   } else {
     return(false); 
   }
@@ -309,6 +310,7 @@ void settings_init() {
     settings_restore(SETTINGS_RESTORE_ALL); // Force restore all EEPROM data.
     report_grbl_settings();
   }
+  spindle_I_max = settings.spindle_over_I_max * (1023.0/2.56);
 
   // NOTE: Checking paramater data, startup lines, and build info string should be done here, 
   // but it seems fairly redundant. Each of these can be manually checked and reset or restored.
