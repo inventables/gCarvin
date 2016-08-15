@@ -129,7 +129,7 @@ void checkControlPins()
 		else
 		{
 			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-			printPgmString(PSTR("[Do Door]\r\n"));
+			printPgmString(PSTR("[Safety Door]\r\n"));
 		}
 	  }
 	  
@@ -138,9 +138,9 @@ void checkControlPins()
 	} 
 	else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR))
 	{	
-      //bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-			bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
-			printPgmString(PSTR("[FEED HOLD]\r\n"));
+			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+			//bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
+			printPgmString(PSTR("[Safety Door]\r\n"));
     } 
   }
 	
