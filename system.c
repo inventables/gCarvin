@@ -104,9 +104,13 @@ void checkControlPins()
   
   uint8_t pin = system_control_get_state();  // this returns the control pin corrected with mask and inverts
   
+  // debugging code
+  //printPgmString(PSTR("["));
   //print_uint8_base2(pin);
-  //printPgmString(PSTR("=Pin\r\n"));
+  //printPgmString(PSTR("=Pin]\r\n"));
   
+  
+  // onlt proceed if the pin is in in the action state
   if (pin) { 
   
   

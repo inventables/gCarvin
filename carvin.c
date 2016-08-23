@@ -117,14 +117,15 @@ ISR(TIMER5_COMPA_vect)
 	if (pwm_level_change(&spindle_led))
 	  SPINDLE_LED_OCR = spindle_led.current_level;
   
-    if (pwm_level_change(&spindle_motor))
+    if (pwm_level_change(&spindle_motor)) {
 			if(spindle_motor.current_level == 0) {  // added by Brian R. for PWM 0 fix
 				SPINDLE_PWM_PORT &= ~(1<<SPINDLE_PWM_BIT);
 				TCCRA_REGISTER &= ~(1<<COMB_BIT | 1<<(COMB_BIT-1));
 			} else {
-				TCCRA_REGISTER = (TCCRA_REGISTER | (1<<COMB_BIT)) & ~(1<<COMB_BIT-1);
+				TCCRA_REGISTER = (TCCRA_REGISTER | (1<<COMB_BIT)) & ~(1<<(COMB_BIT-1));
 			}
-		SPINDLE_MOTOR_OCR = spindle_motor.current_level;
+		SPINDLE_MOTOR_OCR = spindle_motor.current_level;  
+	}
   
   
     if (control_button_counter > 0)
