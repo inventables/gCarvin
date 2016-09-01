@@ -146,8 +146,11 @@ uint8_t limits_get_state()
 // TODO: Move limit pin-specific calls to a general function for portability.
 void limits_go_home(uint8_t cycle_mask) 
 {
+  
   if (sys.abort) { return; } // Block if system reset has been issued.
 
+ 
+  
   // Initialize
   uint8_t n_cycle = (2*N_HOMING_LOCATE_CYCLE+1);
   uint8_t step_pin[N_AXIS];
@@ -229,6 +232,7 @@ void limits_go_home(uint8_t cycle_mask)
         if ( (sys_rt_exec_state & (EXEC_SAFETY_DOOR | EXEC_RESET)) ||  // Safety door or reset issued
            (!approach && (limits_get_state() & cycle_mask)) ||  // Limit switch still engaged after pull-off motion
            ( approach && (sys_rt_exec_state & EXEC_CYCLE_STOP)) ) { // Limit switch not found during approach.
+		  
           mc_reset(); // Stop motors, if they are running.
           protocol_execute_realtime();
           return;

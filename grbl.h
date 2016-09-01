@@ -22,8 +22,8 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "1.2.6"
-#define GRBL_VERSION_BUILD "20160819"
+#define GRBL_VERSION "1.2.7"
+#define GRBL_VERSION_BUILD "20160901"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
@@ -43,8 +43,6 @@
 #include "nuts_bolts.h"
 #include "settings.h"
 #include "system.h"
-//#include "defaults.h"
-//#include "cpu_map.h"
 #ifdef CARVIN
 	#include "carvin.h"	
 	#include "TMC26x.h"	

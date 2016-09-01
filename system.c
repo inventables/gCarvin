@@ -103,22 +103,9 @@ void checkControlPins()
   
   
   uint8_t pin = system_control_get_state();  // this returns the control pin corrected with mask and inverts
-  
-  // debugging code
-  //printPgmString(PSTR("["));
-  //print_uint8_base2(pin);
-  //printPgmString(PSTR("=Pin]\r\n"));
-  
-  
   // onlt proceed if the pin is in in the action state
   if (pin) { 
   
-  
-	    //print_uint8_base2(sys.state);
-		//printPgmString(PSTR("=State\r\n"));
-		
-		//print_uint8_base2(sys.suspend);
-		//printPgmString(PSTR("=Suspend\r\n"));
   
     if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START))		
 	{
@@ -126,25 +113,23 @@ void checkControlPins()
 		
 	  if (sys.state != STATE_IDLE)  // button only does something when not in idle
 	  {
-		if (sys.state == STATE_SAFETY_DOOR)
+		if (sys.state == STATE_SAFETY_DOOR || sys.state == STATE_HOLD)
 		{								
-			bit_true(sys_rt_exec_state, EXEC_CYCLE_START);			
+			bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
+			//printPgmString(PSTR("[Start Button]\r\n"));
 		}
 		else
 		{
 			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-			printPgmString(PSTR("[Safety Door]\r\n"));
+			//printPgmString(PSTR("[Hold Switch]\r\n"));
 		}
-	  }
-	  
-	  
+	  }  
       
 	} 
 	else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR))
 	{	
 			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-			//bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
-			printPgmString(PSTR("[Safety Door]\r\n"));
+			//printPgmString(PSTR("[Door Switch]\r\n")); 
     } 
   }
 	
@@ -253,8 +238,7 @@ uint8_t system_execute_line(char *line)
           if ( line[++char_counter] != 0 ) { return(STATUS_INVALID_STATEMENT); }
           else { report_ngc_parameters(); }
           break;          
-        case 'H' : // Perform homing cycle [IDLE/ALARM]
-		  //printPgmString(PSTR("Home req"));	
+        case 'H' : // Perform homing cycle [IDLE/ALARM]	      
           if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) { 
             // Block if safety door is ajar.
             if (system_check_safety_door_ajar()) { return(STATUS_CHECK_DOOR); }

@@ -193,6 +193,7 @@ void mc_dwell(float seconds)
 // executing the homing cycle. This prevents incorrect buffered plans after homing.
 void mc_homing_cycle()
 {
+	
   // Check and abort homing cycle, if hard limits are already enabled. Helps prevent problems
   // with machines with limits wired on both ends of travel to one limit pin.
   // TODO: Move the pin-specific LIMIT_PIN call to limits.c as a function.
@@ -203,7 +204,7 @@ void mc_homing_cycle()
       return;
     }
   #endif
-   
+  
   limits_disable(); // Disable hard limits pin change register for cycle duration
     
   // -------------------------------------------------------------------------------------
@@ -261,12 +262,17 @@ void mc_probe_cycle(float *target, float feed_rate, uint8_t invert_feed_rate, ui
   // Activate the probing state monitor in the stepper module.
   sys_probe_state = PROBE_ACTIVE;
 
+  throb_pwm(&spindle_led, 40, 3);   // Temp Testing
+  
+  
   // Perform probing cycle. Wait here until probe is triggered or motion completes.
   system_set_exec_state_flag(EXEC_CYCLE_START);
   do {
     protocol_execute_realtime(); 
     if (sys.abort) { return; } // Check for system abort
   } while (sys.state != STATE_IDLE);
+  
+  set_pwm(&spindle_led, 0,1);  // Temp Testing need to cover fail scenario
   
   // Probing cycle complete!
   
@@ -330,6 +336,7 @@ void mc_parking_motion(float *parking_target, float feed_rate)
 // realtime abort command and hard limits. So, keep to a minimum.
 void mc_reset()
 {
+
   // Only this function can set the system reset. Helps prevent multiple kill calls.
   if (bit_isfalse(sys_rt_exec_state, EXEC_RESET)) {
     system_set_exec_state_flag(EXEC_RESET);
@@ -342,11 +349,18 @@ void mc_reset()
     // NOTE: If steppers are kept enabled via the step idle delay setting, this also keeps
     // the steppers enabled by avoiding the go_idle call altogether, unless the motion state is
     // violated, by which, all bets are off.
-    if ((sys.state & (STATE_CYCLE | STATE_HOMING)) || 
-    		(sys.step_control & (STEP_CONTROL_EXECUTE_HOLD | STEP_CONTROL_EXECUTE_PARK))) {
-      if (sys.state == STATE_HOMING) { system_set_exec_alarm_flag(EXEC_ALARM_HOMING_FAIL); }
-      else { system_set_exec_alarm_flag(EXEC_ALARM_ABORT_CYCLE); }
+    if ((sys.state & (STATE_CYCLE | STATE_HOMING)) || (sys.step_control & (STEP_CONTROL_EXECUTE_HOLD | STEP_CONTROL_EXECUTE_PARK))) {
+      if (sys.state == STATE_HOMING)
+	  {
+		  
+		  system_set_exec_alarm_flag(EXEC_ALARM_HOMING_FAIL); 
+      }
+      else {
+		  system_set_exec_alarm_flag(EXEC_ALARM_ABORT_CYCLE); 
+      }
       st_go_idle(); // Force kill steppers. Position has likely been lost.
     }
-  }
+	
+  }  
+  
 }

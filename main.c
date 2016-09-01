@@ -85,6 +85,7 @@ int main(void)
     sys_rt_exec_alarm = 0;
     sys.suspend = false;
     sys.soft_limit = false;
+	sys.step_control = STEP_CONTROL_NORMAL_OP; // fix for reset lockup while re-homing in hold state
           
     // Start Grbl main loop. Processes program inputs and executes them.
     protocol_main_loop();

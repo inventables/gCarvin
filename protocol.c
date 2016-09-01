@@ -56,6 +56,11 @@ void protocol_main_loop()
     } 
     system_execute_startup(line); // Execute startup script.
   }
+  
+   
+  #ifdef CARVIN
+		set_button_led();
+  #endif
     
   // ---------------------------------------------------------------------------------  
   // Primary loop! Upon a system abort, this exits back to main() to reset the system. 
@@ -66,14 +71,16 @@ void protocol_main_loop()
   uint8_t char_counter = 0;
   uint8_t c;
   for (;;) {
-
+    
     // Process one line of incoming serial data, as the data becomes available. Performs an
     // initial filtering by removing spaces and comments and capitalizing all letters.    
-    while((c = serial_read()) != SERIAL_NO_DATA) {
+    while((c = serial_read()) != SERIAL_NO_DATA) {      
       if ((c == '\n') || (c == '\r')) { // End of line reached
 
         protocol_execute_realtime(); // Runtime command check point.
-        if (sys.abort) { return; } // Bail to calling function upon system abort  
+        if (sys.abort) {			
+			return; 
+		} // Bail to calling function upon system abort  
 
         line[char_counter] = 0; // Set string termination character.
         #ifdef REPORT_ECHO_LINE_RECEIVED
@@ -88,7 +95,7 @@ void protocol_main_loop()
           // Empty or comment line. For syncing purposes.
           report_status_message(STATUS_OK);
         } else if (line[0] == '$') {
-          // Grbl '$' system command
+          // Grbl '$' system command		  
           report_status_message(system_execute_line(line));
         } else if (sys.state == STATE_ALARM) {
           // Everything else is gcode. Block if in alarm mode.
@@ -151,7 +158,9 @@ void protocol_main_loop()
     protocol_auto_cycle_start();
 
     protocol_execute_realtime();  // Runtime command check point.
-    if (sys.abort) { return; } // Bail to main() program loop to reset system.
+    if (sys.abort) {		
+		return; 
+	} // Bail to main() program loop to reset system.
               
     #ifdef SLEEP_ENABLE
       // Check for sleep conditions and execute auto-park, if timeout duration elapses.
@@ -310,7 +319,7 @@ void protocol_exec_rt_system()
         // Execute a feed hold with deceleration, if required. Then, suspend system.
         if (rt_exec & EXEC_FEED_HOLD) {
           // Block SAFETY_DOOR and SLEEP states from changing to HOLD state.
-          if (!(sys.state & (STATE_SAFETY_DOOR|STATE_SLEEP))) { sys.state = STATE_HOLD; }
+          if (!(sys.state & (STATE_SAFETY_DOOR|STATE_SLEEP))) { sys.state = STATE_HOLD; set_button_led();}
         }
 
         // Execute a safety door stop with a feed hold and disable spindle/coolant.
@@ -515,7 +524,8 @@ static void protocol_exec_rt_suspend()
           if (!(system_check_safety_door_ajar())) {
 			#ifdef CARVIN
 			  if (sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) // prevent doing this more than once
-				throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
+			    set_button_led();
+				//throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
 			#endif			
             sys.suspend &= ~(SUSPEND_SAFETY_DOOR_AJAR); // Reset door ajar flag to denote ready to resume.            
 		  }

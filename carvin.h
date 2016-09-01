@@ -71,7 +71,8 @@ void carvin_init();
 // functions to work with the LEDs
 void init_pwm(struct pwm_analog * led);
 void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
-int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is needed
+int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is 
+void set_button_led();
 
 
 

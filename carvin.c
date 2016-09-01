@@ -249,6 +249,16 @@ int pwm_level_change(struct pwm_analog * pwm)
 	
 }
 
+void set_button_led()
+{
+	if ((sys.state == STATE_HOLD) || (sys.state == STATE_SAFETY_DOOR))
+	{
+		throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
+	}
+	else
+		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+}
+
 /*  
 */
 uint8_t get_hardware_rev()
