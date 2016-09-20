@@ -193,101 +193,71 @@ static st_prep_t prep;
 // enabled. Startup init and limits call this function but shouldn't start the cycle.
 void st_wake_up() 
 {
-	
-  //printPgmString(PSTR("Wakeup\r\n"));	//debug info
-	
   // Enable stepper drivers.
-  #ifdef CARVIN
-  #ifdef GEN2_HARDWARE
-    //setTMC26xRunCurrent(true); // turned this off while working on homing bug
-  #endif
-  #endif
-  
-  
-  
-  
-  #ifdef CARVIN
-  
-	STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);  // this is the GEN2_HARDWARE TODO add the GEN1
-	
-  #else
-	  
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) 
-	{ STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
-  else 
-	{ STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
-  #endif	
-  
-  
-//   if (sys.state & (STATE_CYCLE | STATE_HOMING)){
-    // Initialize stepper output bits
-    st.dir_outbits = dir_port_invert_mask; 
-    st.step_outbits = step_port_invert_mask;
-    
-    // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
-    #ifdef STEP_PULSE_DELAY
-      // Set total step pulse time after direction pin set. Ad hoc computation from oscilloscope.
-      st.step_pulse_time = -(((settings.pulse_microseconds+STEP_PULSE_DELAY-2)*TICKS_PER_MICROSECOND) >> 3);
-      // Set delay between direction pin write and step command.
-      OCR0A = -(((settings.pulse_microseconds)*TICKS_PER_MICROSECOND) >> 3);
-    #else // Normal operation
-      // Set step pulse time. Ad hoc computation from oscilloscope. Uses two's complement.
-      st.step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
-    #endif
+  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+  else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
 
-    // Enable Stepper Driver Interrupt
-    TIMSK1 |= (1<<OCIE1A);
-//   }
+  // Initialize stepper output bits
+  st.dir_outbits = dir_port_invert_mask; 
+  st.step_outbits = step_port_invert_mask;
+  
+  // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
+  #ifdef STEP_PULSE_DELAY
+    // Set total step pulse time after direction pin set. Ad hoc computation from oscilloscope.
+    st.step_pulse_time = -(((settings.pulse_microseconds+STEP_PULSE_DELAY-2)*TICKS_PER_MICROSECOND) >> 3);
+    // Set delay between direction pin write and step command.
+    OCR0A = -(((settings.pulse_microseconds)*TICKS_PER_MICROSECOND) >> 3);
+  #else // Normal operation
+    // Set step pulse time. Ad hoc computation from oscilloscope. Uses two's complement.
+    st.step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
+  #endif
+
+  // Enable Stepper Driver Interrupt
+  TIMSK1 |= (1<<OCIE1A);
+  
+  #ifdef CARVIN  
+    setTMC26xRunCurrent(1); // turned this off while working on homing bug  
+  #endif
+  
 }
 
 
 // Stepper shutdown
 void st_go_idle() 
 {
-  //printPgmString(PSTR("Go Idle\r\n")); //debug text
-	
   // Disable Stepper Driver Interrupt. Allow Stepper Port Reset Interrupt to finish, if active.
   TIMSK1 &= ~(1<<OCIE1A); // Disable Timer1 interrupt
   TCCR1B = (TCCR1B & ~((1<<CS12) | (1<<CS11))) | (1<<CS10); // Reset clock to no prescaling.
   busy = false;
   
-  
-  
   // Set stepper driver idle state, disabled or enabled, depending on settings and circumstances.
   bool pin_state = false; // Keep enabled.
-  if (((settings.stepper_idle_lock_time != 0xff) || sys.rt_exec_alarm) && sys.state != STATE_HOMING) {
+  if (((settings.stepper_idle_lock_time != 0xff) || sys_rt_exec_alarm) && sys.state != STATE_HOMING) {
     // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
     // stop and not drift from residual inertial forces at the end of the last movement.
     delay_ms(settings.stepper_idle_lock_time);
     pin_state = true; // Override. Disable steppers.
   }
-  
-#ifdef CARVIN
-
-  #ifdef GEN2_HARDWARE    
-    //setTMC26xRunCurrent(false);	
-	
-	// if we are in alarm, we can turn the motors off, else leave them on
-	// this allows hand movement before homing
-	
-	if (sys.state == STATE_ALARM)	{  // think about STATE_HOMING
+  #ifdef CARVIN
+	    // if we are in alarm, we can turn the motors off, else leave them on
+		// this allows hand movement before homing
 		
-		STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-	}
-	else
-	{
-		STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);	
-	}
+		if (sys.state == STATE_ALARM)	{  // think about STATE_HOMING
+			
+			STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+		}
+		else
+		{
+			STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);	
+		}
+  #else
+	  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { pin_state = !pin_state; } // Apply pin invert.
+	  if (pin_state) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+      else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
   #endif
   
-#else
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) 
-	{ pin_state = !pin_state; } // Apply pin invert.
-  if (pin_state) 
-	{ STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
-  else 
-	{ STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
-#endif
+  
+  
 }
 
 
@@ -399,7 +369,7 @@ ISR(TIMER1_COMPA_vect)
     } else {
       // Segment buffer empty. Shutdown.
       st_go_idle();
-      bit_true_atomic(sys.rt_exec_state,EXEC_CYCLE_STOP); // Flag main program for cycle end
+      system_set_exec_state_flag(EXEC_CYCLE_STOP); // Flag main program for cycle end
       return; // Nothing to do but exit.
     }  
   }
@@ -512,8 +482,8 @@ void st_reset()
   st_go_idle();
   
   // Initialize stepper algorithm variables.
-  memset(&prep, 0, sizeof(prep));
-  memset(&st, 0, sizeof(st));
+  memset(&prep, 0, sizeof(st_prep_t));
+  memset(&st, 0, sizeof(stepper_t));
   st.exec_segment = NULL;
   pl_block = NULL;  // Planner block pointer used by segment buffer
   segment_buffer_tail = 0;
@@ -977,12 +947,7 @@ void st_prep_buffer()
 // however is not exactly the current speed, but the speed computed in the last step segment
 // in the segment buffer. It will always be behind by up to the number of segment blocks (-1)
 // divided by the ACCELERATION TICKS PER SECOND in seconds. 
-#ifdef REPORT_REALTIME_RATE
-  float st_get_realtime_rate()
-  {
-     if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_HOLD | STATE_MOTION_CANCEL | STATE_SAFETY_DOOR)){
-       return prep.current_speed;
-     }
-    return 0.0f;
-  }
-#endif
+float st_get_realtime_rate()
+{
+  return prep.current_speed;
+}

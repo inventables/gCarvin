@@ -121,9 +121,8 @@ static uint8_t plan_prev_block_index(uint8_t block_index)
   motion(s) distance per block to a desired tolerance. The more combined distance the planner has to use,
   the faster it can go. (3) Maximize the planner buffer size. This also will increase the combined distance
   for the planner to compute over. It also increases the number of computations the planner has to perform
-  to compute an optimal plan, so select carefully. The Arduino 328p memory is already maxed out, but future
-  ARM versions should have enough memory and speed for look-ahead blocks numbering up to a hundred or more.
-
+  to compute an optimal plan, so select carefully. 
+  
 */
 static void planner_recalculate() 
 {   
@@ -200,7 +199,7 @@ static void planner_recalculate()
 
 void plan_reset() 
 {
-  memset(&pl, 0, sizeof(pl)); // Clear planner struct
+  memset(&pl, 0, sizeof(planner_t)); // Clear planner struct
   block_buffer_tail = 0;
   block_buffer_head = 0; // Empty = tail
   next_buffer_head = 1; // plan_next_block_index(block_buffer_head)
@@ -262,11 +261,7 @@ uint8_t plan_check_full_buffer()
    head. It avoids changing the planner state and preserves the buffer to ensure subsequent gcode
    motions are still planned correctly, while the stepper module only points to the block buffer head 
    to execute the parking motion. */
-#ifdef USE_LINE_NUMBERS   
-  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_parking_motion, int32_t line_number) 
-#else
-  uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_parking_motion) 
-#endif
+uint8_t plan_buffer_line(float *target, float feed_rate, uint8_t invert_feed_rate, uint8_t is_parking_motion, int32_t line_number) 
 {
   // Prepare and initialize new block
   plan_block_t *block = &block_buffer[block_buffer_head];
@@ -274,13 +269,9 @@ uint8_t plan_check_full_buffer()
   block->millimeters = 0;
   block->direction_bits = 0;
   block->acceleration = SOME_LARGE_VALUE; // Scaled down to maximum acceleration later
-  #ifdef USE_LINE_NUMBERS
-    block->line_number = line_number;
-  #endif
+  block->line_number = line_number;
 
   // Compute and store initial move distance data.
-  // TODO: After this for-loop, we don't touch the stepper algorithm data. Might be a good idea
-  // to try to keep these types of things completely separate from the planner for portability.
   int32_t target_steps[N_AXIS], position_steps[N_AXIS];
   float unit_vec[N_AXIS], delta_mm;
   uint8_t idx;
@@ -333,7 +324,6 @@ uint8_t plan_check_full_buffer()
   if (block->step_event_count == 0) { return(PLAN_EMPTY_BLOCK); } 
   
   // Adjust feed_rate value to mm/min depending on type of rate input (normal, inverse time, or rapids)
-  // TODO: Need to distinguish a rapids vs feed move for overrides. Some flag of some sort.
   if (feed_rate < 0) { feed_rate = SOME_LARGE_VALUE; } // Scaled down to absolute max/rapids rate later
   else if (invert_feed_rate) { feed_rate *= block->millimeters; }
   if (feed_rate < MINIMUM_FEED_RATE) { feed_rate = MINIMUM_FEED_RATE; } // Prevents step generation round-off condition.
@@ -342,23 +332,26 @@ uint8_t plan_check_full_buffer()
   // down such that no individual axes maximum values are exceeded with respect to the line direction. 
   // NOTE: This calculation assumes all axes are orthogonal (Cartesian) and works with ABC-axes,
   // if they are also orthogonal/independent. Operates on the absolute value of the unit vector.
-  float inverse_unit_vec_value;
+  float junction_vec[N_AXIS];
   float inverse_millimeters = 1.0/block->millimeters;  // Inverse millimeters to remove multiple float divides	
   float junction_cos_theta = 0.0;
+  float magnitude_junction_vec = 0.0;
   for (idx=0; idx<N_AXIS; idx++) {
     if (unit_vec[idx] != 0) {  // Avoid divide by zero.
       unit_vec[idx] *= inverse_millimeters;  // Complete unit vector calculation
-      inverse_unit_vec_value = fabs(1.0/unit_vec[idx]); // Inverse to remove multiple float divides.
 
       // Check and limit feed rate against max individual axis velocities and accelerations
-      feed_rate = min(feed_rate,settings.max_rate[idx]*inverse_unit_vec_value);
-      block->acceleration = min(block->acceleration,settings.acceleration[idx]*inverse_unit_vec_value);
-
+      block->acceleration = min(block->acceleration,fabs(settings.acceleration[idx]/unit_vec[idx]));
+      feed_rate = min(feed_rate,fabs(settings.max_rate[idx]/unit_vec[idx]));
+      
       // Incrementally compute cosine of angle between previous and current path. Cos(theta) of the junction
       // between the current move and the previous move is simply the dot product of the two unit vectors, 
       // where prev_unit_vec is negative. Used later to compute maximum junction speed.
-      junction_cos_theta -= pl.previous_unit_vec[idx] * unit_vec[idx];
+      junction_cos_theta -= pl.previous_unit_vec[idx]*unit_vec[idx];
     }
+    // Compute junction acceleration vector. Magnitude completed later when necessary.
+    junction_vec[idx] = unit_vec[idx]-pl.previous_unit_vec[idx];
+    magnitude_junction_vec += junction_vec[idx]*junction_vec[idx];
   }
 
   // TODO: Need to check this method handling zero junction speeds when starting from rest.
@@ -393,19 +386,28 @@ uint8_t plan_check_full_buffer()
        memory in the event of a feedrate override changing the nominal speeds of blocks, which can 
        change the overall maximum entry speed conditions of all blocks.
     */
+    
     // NOTE: Computed without any expensive trig, sin() or acos(), by trig half angle identity of cos(theta).
-    if (junction_cos_theta > 0.99) {
+    if (junction_cos_theta > 0.999999) {
       //  For a 0 degree acute junction, just set minimum junction speed. 
       block->max_junction_speed_sqr = MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED;
     } else {
-      junction_cos_theta = max(junction_cos_theta,-0.99); // Check for numerical round-off to avoid divide by zero.
-      float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
-
-      // TODO: Technically, the acceleration used in calculation needs to be limited by the minimum of the
-      // two junctions. However, this shouldn't be a significant problem except in extreme circumstances.
-      block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
-                     (block->acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
-
+      if (junction_cos_theta < -0.999999) {
+        // Junction is a straight line or 180 degrees. Junction speed is infinite.
+        block->max_junction_speed_sqr = SOME_LARGE_VALUE;
+      } else {
+        float junction_acceleration = SOME_LARGE_VALUE;
+        magnitude_junction_vec = sqrt(magnitude_junction_vec); // Complete magnitude calculation.
+        for (idx=0; idx<N_AXIS; idx++) {
+          if (junction_vec[idx] != 0) {  // Avoid divide by zero.
+            junction_acceleration = min( junction_acceleration,
+                  fabs((settings.acceleration[idx]*magnitude_junction_vec)/junction_vec[idx]) );
+          }
+        }
+        float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta)); // Trig half angle identity. Always positive.
+        block->max_junction_speed_sqr = max( MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED,
+                       (junction_acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2) );
+      }
     }
   }
   

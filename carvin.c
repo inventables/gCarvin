@@ -9,8 +9,6 @@
 #include "settings.h"
 #include "carvin.h"
 
-
-
 int control_button_counter = 0;  // initialize this for use in button debouncing
 
 
@@ -18,25 +16,20 @@ int control_button_counter = 0;  // initialize this for use in button debouncing
 void carvin_init()
 {
   
-	
+  use_sleep_feature = true;
  
+  // setup the hardware I.D. 
+  HRDW_ID_DDR &= ~(HRDW_ID_MASK);  // make pins inputs
+  HRDW_ID_PORT |= HRDW_ID_MASK;  // Turn on the internal pullups
   
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
   
- 
-  #ifdef GEN1_HARDWARE
-    STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
-	set_stepper_current(0);
-  #endif
+  hardware_rev = get_hardware_rev();
   
-  #ifdef GEN2_HARDWARE
-	tmc26x_init();  // SPI functions to program the chips
-  #endif
-	
-
+  tmc26x_init();  // SPI functions to program the chips
   
 	// -------------- Setup PWM on Timer 4 ------------------------------
 	
@@ -55,7 +48,7 @@ void carvin_init()
   //  PORTE BIT 3, OCR3A (stepper driver current)
   //  PORTE BIT4, OCR3B (Door Light)  !!!! schem error
   
-	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
+  TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycle
   DOOR_LED_OCR = 0;
@@ -76,6 +69,20 @@ void carvin_init()
   
   TIMSK5 |= (1 << OCIE5A);  // enable timer compare interrupt (grbl turns on interrupts)
   
+  
+  if (hardware_rev >= SPINDLE_I_REV)
+  {
+	  // ---------------- Setup free running ADC ------------------------
+	  
+	  // Enable ADC. Free running mode. Prescale=16.  2.56V internal voltage reference.
+	  ADCSRA = (1<<ADEN)|(1<<ADATE)|(1<<ADPS2);
+	  ADMUX  = (1<<REFS1 | (1<<REFS0));
+	  ADCSRA |= (1<<ADSC);
+	  
+	  spindle_current_counter = SPINDLE_I_COUNT;
+	 
+  }
+  
   // ----------------Initial LED SETUP -----------------------------
   
   // setup LEDs and spindle
@@ -88,18 +95,11 @@ void carvin_init()
   set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
   set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
 	
-	// set the stepper currents
-	#ifdef GEN1_HARDWARE
-		set_stepper_current(STEPPER_RUN_CURRENT);
-	#endif
-	
-	#ifdef GEN2_HARDWARE
-		//setTMC26xRunCurrent(0); // not run current yet TOD0 Debugging motors
-	#endif
+  setTMC26xRunCurrent(1);
 	
 }
 
-// Timer3 Interrupt
+// Timer5 Interrupt
 // keep this fast to not bother the stepper timing
 // Things done here......
 // 	LED Animations
@@ -117,8 +117,15 @@ ISR(TIMER5_COMPA_vect)
 	if (pwm_level_change(&spindle_led))
 	  SPINDLE_LED_OCR = spindle_led.current_level;
   
-    if (pwm_level_change(&spindle_motor))
-	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
+    if (pwm_level_change(&spindle_motor)) {
+			if(spindle_motor.current_level == 0) {  // added by Brian R. for PWM 0 fix
+				SPINDLE_PWM_PORT &= ~(1<<SPINDLE_PWM_BIT);
+				TCCRA_REGISTER &= ~(1<<COMB_BIT | 1<<(COMB_BIT-1));
+			} else {
+				TCCRA_REGISTER = (TCCRA_REGISTER | (1<<COMB_BIT)) & ~(1<<(COMB_BIT-1));
+			}
+		SPINDLE_MOTOR_OCR = spindle_motor.current_level;  
+	}
   
   
     if (control_button_counter > 0)
@@ -126,6 +133,36 @@ ISR(TIMER5_COMPA_vect)
 		control_button_counter--;
 		if (control_button_counter == 0)
 			checkControlPins();
+	}
+	
+	if (spindle_current_counter <= 0 && hardware_rev >= SPINDLE_I_REV && (sys.state != STATE_SAFETY_DOOR))
+	{
+		unsigned long measurement;
+		// check the current
+		
+	    measurement = ADCL; // need to read this register first
+		measurement += ((long)ADCH)<<8;
+		
+		// filter it
+		
+		spindle_current = (SPINDLE_I_AVG_CONST * (long)spindle_current + (SPINDLE_I_MULTIPLIER - SPINDLE_I_AVG_CONST) * measurement )/ SPINDLE_I_MULTIPLIER;
+		
+		// check it
+		
+		if (spindle_current > spindle_I_max)
+		{
+			printPgmString(PSTR("[OverCurrent:"));
+			printInteger(spindle_current);
+			printPgmString(PSTR("]\r\n"));
+			system_set_exec_state_flag(EXEC_SAFETY_DOOR); // ?? does this work?
+		}
+		
+		spindle_current_counter = SPINDLE_I_COUNT;
+		
+	}
+	else
+	{
+	    spindle_current_counter--;
 	}
 	
 	
@@ -145,6 +182,7 @@ void init_pwm(struct pwm_analog * pwm)
 // setup an LED with a new brightness level ... change is done via ISR
 void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 {
+	
 	(* pwm).duration = duration;
 	(* pwm).throb = false;
 	(* pwm).target = target_level;	
@@ -156,8 +194,8 @@ void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 	duration = seconds for the fade
 */
 void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
-{
-	(* pwm).current_level = 0;
+{		
+	//(* pwm).current_level = 0;
 	(* pwm).duration = duration;	
 	(* pwm).throb = true;	
 	(* pwm).target = LED_FULL_ON;
@@ -211,21 +249,31 @@ int pwm_level_change(struct pwm_analog * pwm)
 	
 }
 
-#ifdef GEN1_HARDWARE
-void set_stepper_current(float current)
+void set_button_led()
+{
+	if ((sys.state == STATE_HOLD) || (sys.state == STATE_SAFETY_DOOR))
+	{
+		throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
+	}
+	else
+		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+}
+
+/*  
+*/
+uint8_t get_hardware_rev()
 {
 	
-  float vref = 0;
-  
-  // current = VREF /(8× RS)  from driver datasheet
-  vref = current * (8 * I_SENSE_RESISTOR);  
- 
-  // vref goes through a resistor dividor that cuts the voltage in half
-  vref = (vref /2.5) * 1023 / 2;
-  
-  STEPPER_VREF_OCR = (int)vref;
+	
+	uint8_t rev = 0;
+	
+	rev = (HRDW_ID_PIN & HRDW_ID_MASK) >>HRDW_ID_0;	
+	rev ^= (0b11111);
+	
+	return (rev);
+	
+	
 }
-#endif
 
 
 /*

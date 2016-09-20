@@ -21,8 +21,7 @@
 #include "grbl.h"
 
 
-
-void system_init() 
+void system_init()
 {
   CONTROL_DDR &= ~(CONTROL_MASK); // Configure as input pins
   #ifdef DISABLE_CONTROL_PIN_PULL_UP
@@ -34,6 +33,7 @@ void system_init()
   PCICR |= (1 << CONTROL_INT);   // Enable Pin Change Interrupt
 }
 
+
 // Returns control pin state as a uint8 bitfield. Each bit indicates the input pin state, where 
 // triggered is 1 and not triggered is 0. Invert mask is applied. Bitfield organization is
 // defined by the CONTROL_PIN_INDEX in the header file.
@@ -41,16 +41,14 @@ uint8_t system_control_get_state()
 {
   uint8_t control_state = 0;
   uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  #ifndef INVERT_ALL_CONTROL_PINS
-    pin ^= CONTROL_INVERT_MASK;
+  #ifdef INVERT_CONTROL_PIN_MASK
+    pin ^= INVERT_CONTROL_PIN_MASK;
   #endif
   if (pin) {
-    #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-      if (bit_istrue(pin,(1<<SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
-    #endif
-    if (bit_istrue(pin,(1<<RESET_BIT))) { control_state |= CONTROL_PIN_INDEX_RESET; }
-    if (bit_istrue(pin,(1<<FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
-    if (bit_istrue(pin,(1<<CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
+    if (bit_istrue(pin,(1<<CONTROL_SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
+    if (bit_istrue(pin,(1<<CONTROL_RESET_BIT))) { control_state |= CONTROL_PIN_INDEX_RESET; }
+    if (bit_istrue(pin,(1<<CONTROL_FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
+    if (bit_istrue(pin,(1<<CONTROL_CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
   }
   return(control_state);
 }
@@ -62,109 +60,93 @@ uint8_t system_control_get_state()
 // directly from the incoming serial data stream.
 ISR(CONTROL_INT_vect) 
 {
-  control_button_counter = CONTROL_DEBOUNCE_COUNT;  // the inital count is set here
-  /*
-  The front button acts as a stop and a restart.  Therefore bouncing cannot be tolerated
-  
-  A timer5 interrupt will count down to 0 and check the pin state
-  if there is bouncing, this will reset the count before the pins are checked
-  
-  */
-}
-
-
-void checkControlPins()
-{
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  
-  // if some are inverted logic pins they need flipped
-  #ifdef CONTROL_INVERT_MASK
-    pin ^= CONTROL_INVERT_MASK;
+  #ifdef CARVIN
+	/* Carvey has to deal with the button differently because the front button
+	   does two functions hold/reset and therefore needs to be debounced
+		 
+		 ISR(TIMER5_COMPA_vect) // will do the debounce
+		 
+	*/
+	control_button_counter = CONTROL_DEBOUNCE_COUNT;  // the inital count is set here
+	return;
   #endif
   
-  // Enter only if any CONTROL pin is detected as active.
+  uint8_t pin = system_control_get_state();
   if (pin) { 
-    if (bit_istrue(pin,bit(RESET_BIT))) {
+    if (bit_istrue(pin,CONTROL_PIN_INDEX_RESET)) {
       mc_reset();
-    } 
-	
-	
-	else if (bit_istrue(pin,bit(CYCLE_START_BIT))) //the front button
-	{	
-	   
-		
-	   if (sys.state != STATE_IDLE)  // button only does something when not in idle
-	   {
-			if (sys.state == STATE_HOLD)
-			{		
-				
-				if (bit_istrue(sys.suspend, SUSPEND_INITIATE_RESTORE))
-				{					
-					bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
-				}
-				else
-				{					
-					bit_true(sys.rt_exec_state, EXEC_CYCLE_START);
-			    }
-			}
-			else
-			{
-				bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR); 
-			}			
-			
-	   }
-
-  
-    #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
-    } else if (bit_istrue(pin,bit(FEED_HOLD_BIT)))
-	{
-        bit_true(sys.rt_exec_state, EXEC_FEED_HOLD); 
-    #else
-     }
-		else if (bit_istrue(pin,bit(SAFETY_DOOR_BIT))) {
-        bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);
-    #endif
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) {
+      bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
+      bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
+      bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
     } 
   }
 }
 
-
-
-
-/*
-
-// Returns if safety door is ajar(T) or closed(F), based on pin state.
-uint8_t system_check_safety_door_ajar()
+void checkControlPins()
 {
-  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
-    #ifdef INVERT_CONTROL_MASK
-	  if (INVERT_CONTROL_MASK && (1<<SAFETY_DOOR_BIT))
-	  {  
-		return(bit_istrue(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-	  }
-	  else
-		return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-    #else
-      return(bit_isfalse(CONTROL_PIN,bit(SAFETY_DOOR_BIT)));
-    #endif
-  #else
-    return(false); // Input pin not enabled, so just return that it's closed.
-  #endif
+  /*
+	CARVIN There are only 2 control pins
+		The front button, which is CONTROL_CYCLE_START_BIT
+	    The door, which is CONTROL_SAFETY_DOOR_BIT
+		
+		The front button
+			Does nothing in IDLE
+			Does Cycle Start when in hold
+			Does hold when not in hold
+			
+			
+  */	
   
+  
+  
+  uint8_t pin = system_control_get_state();  // this returns the control pin corrected with mask and inverts
+  // onlt proceed if the pin is in in the action state
+  if (pin) { 
+  
+  
+    if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START))		
+	{
+	   
+		
+	  if (sys.state != STATE_IDLE)  // button only does something when not in idle
+	  {
+		if (sys.state == STATE_SAFETY_DOOR || sys.state == STATE_HOLD)
+		{								
+			bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
+			//printPgmString(PSTR("[Start Button]\r\n"));
+		}
+		else
+		{
+			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+			//printPgmString(PSTR("[Hold Switch]\r\n"));
+		}
+	  }  
+      
+	} 
+	else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR))
+	{	
+			bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+			//printPgmString(PSTR("[Door Switch]\r\n")); 
+    } 
+  }
+	
+	
   
 }
 
-*/
-
 
 // Returns if safety door is ajar(T) or closed(F), based on pin state.
 uint8_t system_check_safety_door_ajar()
 {
-  #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
+	#ifdef CARVIN
+		//if (! use_door_feature)
+			//return false;
+	#endif
     return(system_control_get_state() & CONTROL_PIN_INDEX_SAFETY_DOOR);
-  #else
-    return(false); // Input pin not enabled, so just return that it's closed.
-  #endif
+	
 }
 
 
@@ -197,7 +179,7 @@ uint8_t system_execute_line(char *line)
 {   
   uint8_t char_counter = 1; 
   uint8_t helper_var = 0; // Helper variable
-  float parameter, value;
+  float parameter, value;  
   switch( line[char_counter] ) {
     case 0 : report_grbl_help(); break;
     case '$': case 'G': case 'C': case 'X':
@@ -231,7 +213,6 @@ uint8_t system_execute_line(char *line)
             report_feedback_message(MESSAGE_ALARM_UNLOCK);
             sys.state = STATE_IDLE;
             // Don't run startup script. Prevents stored moves in startup from causing accidents.
-            
           } // Otherwise, no effect.
           break;                   
     //  case 'J' : break;  // Jogging methods
@@ -246,19 +227,18 @@ uint8_t system_execute_line(char *line)
           // handled by the planner. It would be possible for the jog subprogram to insert blocks into the
           // block buffer without having the planner plan them. It would need to manage de/ac-celerations 
           // on its own carefully. This approach could be effective and possibly size/memory efficient.  
-//       }
-//       break;
       }
       break;
     default : 
       // Block any system command that requires the state as IDLE/ALARM. (i.e. EEPROM, homing)
+	  
       if ( !(sys.state == STATE_IDLE || sys.state == STATE_ALARM) ) { return(STATUS_IDLE_ERROR); }
       switch( line[char_counter] ) {
         case '#' : // Print Grbl NGC parameters
           if ( line[++char_counter] != 0 ) { return(STATUS_INVALID_STATEMENT); }
           else { report_ngc_parameters(); }
           break;          
-        case 'H' : // Perform homing cycle [IDLE/ALARM]
+        case 'H' : // Perform homing cycle [IDLE/ALARM]	      
           if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) { 
             // Block if safety door is ajar.
             if (system_check_safety_door_ajar()) { return(STATUS_CHECK_DOOR); }
@@ -281,12 +261,13 @@ uint8_t system_execute_line(char *line)
             do {
               line[char_counter-helper_var] = line[char_counter];
             } while (line[char_counter++] != 0);
+            if (char_counter > (EEPROM_LINE_SIZE-helper_var)) { return(STATUS_LINE_LENGTH_EXCEEDED); }
             settings_store_build_info(line);
           }
           break; 
+		  
 		#ifdef CARVIN
 		case 'K':
-			//tmc26x_init();  // just for testing
 			reset_cpu();  // hard reset
 		break;
 		case 'L':
@@ -304,10 +285,21 @@ uint8_t system_execute_line(char *line)
 				set_pwm(&spindle_led, 0,4);
 			}
 		break;
+		
+		case 'D':
+			
+			use_sleep_feature = (! use_sleep_feature);			
+			printPgmString(PSTR(" Sleep Feature "));
+			print_uint8_base10(use_sleep_feature);
+			printPgmString(PSTR(" ]\r\n"));			
+			
+		break;
+		
 		case 'S':
 			print_switch_states();
 		break;
-		#endif
+		#endif  
+		  
         case 'R' : // Restore defaults [IDLE/ALARM]
           if (line[++char_counter] != 'S') { return(STATUS_INVALID_STATEMENT); }
           if (line[++char_counter] != 'T') { return(STATUS_INVALID_STATEMENT); }
@@ -321,7 +313,7 @@ uint8_t system_execute_line(char *line)
           }
           report_feedback_message(MESSAGE_RESTORE_DEFAULTS);
           mc_reset(); // Force reset to ensure settings are initialized correctly.
-          break;		
+          break;
         case 'N' : // Startup lines. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) { // Print startup lines
             for (helper_var=0; helper_var < N_STARTUP_LINE; helper_var++) {
@@ -346,9 +338,10 @@ uint8_t system_execute_line(char *line)
             do {
               line[char_counter-helper_var] = line[char_counter];
             } while (line[char_counter++] != 0);
+            if (char_counter > EEPROM_LINE_SIZE) { return(STATUS_LINE_LENGTH_EXCEEDED); }
             // Execute gcode block to ensure block is valid.
             helper_var = gc_execute_line(line); // Set helper_var to returned status code.
-            if (helper_var) { return(helper_var); }
+            if (helper_var) { return(helper_var); } // Return error.
             else { 
               helper_var = trunc(parameter); // Set helper_var to int value of parameter
               settings_store_startup_line(helper_var,line);
@@ -383,7 +376,7 @@ float system_convert_axis_steps_to_mpos(int32_t *steps, uint8_t idx)
   #endif
   return(pos);
 }
-  
+
 
 void system_convert_array_steps_to_mpos(float *position, int32_t *steps)
 {
@@ -392,4 +385,34 @@ void system_convert_array_steps_to_mpos(float *position, int32_t *steps)
     position[idx] = system_convert_axis_steps_to_mpos(steps, idx);
   }
   return;
+}
+
+
+// Special handlers for setting and clearing Grbl's real-time execution flags.
+void system_set_exec_state_flag(uint8_t mask) {
+  uint8_t sreg = SREG; 
+  cli(); 
+  sys_rt_exec_state |= (mask);
+  SREG = sreg;
+}
+
+void system_clear_exec_state_flag(uint8_t mask) {
+  uint8_t sreg = SREG; 
+  cli(); 
+  sys_rt_exec_state &= ~(mask);
+  SREG = sreg;
+}
+
+void system_set_exec_alarm_flag(uint8_t mask) {
+  uint8_t sreg = SREG; 
+  cli(); 
+  sys_rt_exec_alarm |= (mask);
+  SREG = sreg;
+}
+
+void system_clear_exec_alarm_flag(uint8_t mask) {
+  uint8_t sreg = SREG; 
+  cli(); 
+  sys_rt_exec_alarm &= ~(mask);
+  SREG = sreg;
 }

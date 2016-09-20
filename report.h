@@ -35,6 +35,7 @@
 #define STATUS_OVERFLOW 11
 #define STATUS_MAX_STEP_RATE_EXCEEDED 12
 #define STATUS_CHECK_DOOR 13
+#define STATUS_LINE_LENGTH_EXCEEDED 14
 
 #define STATUS_GCODE_UNSUPPORTED_COMMAND 20
 #define STATUS_GCODE_MODAL_GROUP_VIOLATION 21
@@ -71,6 +72,7 @@
 #define MESSAGE_SAFETY_DOOR_AJAR 6
 #define MESSAGE_PROGRAM_END 7
 #define MESSAGE_RESTORE_DEFAULTS 8
+#define MESSAGE_SLEEP_MODE 9
 
 // Prints system status messages.
 void report_status_message(uint8_t status_code);

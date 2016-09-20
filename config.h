@@ -2,7 +2,7 @@
   config.h - compile time configuration
   Part of Grbl
 
-  Copyright (c) 2012-2015 Sungeun K. Jeon
+  Copyright (c) 2012-2016 Sungeun K. Jeon
   Copyright (c) 2009-2011 Simen Svale Skogsrud
 
   Grbl is free software: you can redistribute it and/or modify
@@ -30,15 +30,15 @@
 #include "grbl.h" // For Arduino IDE compatibility.
 
 
-// Default settings. Used when resetting EEPROM. Change to desired name in defaults.h
-#define DEFAULTS_CARVIN
+// Define CPU pin map and default settings.
+// NOTE: OEMs can avoid the need to maintain/update the defaults.h and cpu_map.h files and use only
+// one configuration file by placing their specific defaults and pin map at the bottom of this file.
+// If doing so, simply comment out these two defines and see instructions below.
+//#define DEFAULTS_GENERIC
+//#define CPU_MAP_2560_INITIAL
 
 // Serial baud rate
 #define BAUD_RATE 115200
-
-// Default cpu mappings. Grbl officially supports the Arduino Uno only. Other processor types
-// may exist from user-supplied templates or directly user-defined in cpu_map.h
-#define CPU_MAP_CARVIN // Arduino Uno CPU
 
 // Define realtime command special characters. These characters are 'picked-off' directly from the
 // serial read data stream and are not passed to the grbl line execution parser. Select characters
@@ -50,8 +50,8 @@
 #define CMD_FEED_HOLD '!'
 #define CMD_CYCLE_START '~'
 #define CMD_RESET 0x18 // ctrl-x.
-#define CMD_RESET_CPU 0x19
 #define CMD_SAFETY_DOOR '@'
+#define CMD_RESET_CPU 0x19
 
 // If homing is enabled, homing init lock sets Grbl into an alarm state upon power up. This forces
 // the user to perform the homing cycle (or override the locks) before doing anything else. This is
@@ -74,8 +74,9 @@
 // will not be affected by pin sharing.
 // NOTE: Defaults are set for a traditional 3-axis CNC machine. Z-axis first to clear, followed by X & Y.
 #define HOMING_CYCLE_0 (1<<Z_AXIS)                // REQUIRED: First move Z
-#define HOMING_CYCLE_1 (1<<X_AXIS) 
-#define HOMING_CYCLE_2 (1<<Y_AXIS) 
+#define HOMING_CYCLE_1 ((1<<X_AXIS)|(1<<Y_AXIS))
+//#define HOMING_CYCLE_1 (1<<X_AXIS) 
+//#define HOMING_CYCLE_2 (1<<Y_AXIS) 
 
 // Number of homing cycles performed after when the machine initially jogs to limit switches.
 // This help in preventing overshoot and should improve repeatability. This value should be one or 
@@ -113,30 +114,16 @@
 // homing cycle while on the limit switch and not have to move the machine off of it.
 // #define LIMITS_TWO_SWITCHES_ON_AXES
 
-// Allows GRBL to track and report gcode line numbers.  Enabling this means that the planning buffer
-// goes from 18 or 16 to make room for the additional line number data in the plan_block_t struct
-// #define USE_LINE_NUMBERS // Disabled by default. Uncomment to enable.
-
-// Allows GRBL to report the real-time feed rate.  Enabling this means that GRBL will be reporting more 
-// data with each status update.
-// NOTE: This is experimental and doesn't quite work 100%. Maybe fixed or refactored later.
-// #define REPORT_REALTIME_RATE // Disabled by default. Uncomment to enable.
+// Allows GRBL to track and report gcode line numbers and real-time feed rate. Both of these may
+// be toggled to be visible when their status report mask setting when enabled.
+// NOTE: The option to disable these will be removed soon, as these will be added permanently.
+//#define REPORT_REALTIME_LINE_NUMBERS // Enabled by default. Comment to disable.
+//#define REPORT_REALTIME_RATE // Enabled by default. Comment to disable.
 
 // Upon a successful probe cycle, this option provides immediately feedback of the probe coordinates
 // through an automatically generated message. If disabled, users can still access the last probe
 // coordinates through Grbl '$#' print parameters.
 #define MESSAGE_PROBE_COORDINATES // Enabled by default. Comment to disable.
- 
-// Enables a second coolant control pin via the mist coolant g-code command M7 on the Arduino Uno
-// analog pin 5. Only use this option if you require a second coolant control pin.
-// NOTE: The M8 flood coolant control pin on analog pin 4 will still be functional regardless.
-// #define ENABLE_M7 // Disabled by default. Uncomment to enable.
-
-// This option causes the feed hold input to act as a safety door switch. A safety door, when triggered,
-// immediately forces a feed hold and then safely de-energizes the machine. Resuming is blocked until
-// the safety door is re-engaged. When it is, Grbl will re-energize the machine and then resume on the
-// previous tool path, as if nothing happened.
-#define ENABLE_SAFETY_DOOR_INPUT_PIN // Default disabled. Uncomment to enable.
 
 // After the safety door switch has been toggled and restored, this setting sets the power-up delay
 // between restoring the spindle and coolant and resuming the cycle.
@@ -152,13 +139,20 @@
 // have the same steps per mm internally.
 // #define COREXY // Default disabled. Uncomment to enable.
 
-// Inverts pin logic of the control command pins. This essentially means when this option is enabled
-// you can use normally-closed switches, rather than the default normally-open switches.
+// Inverts pin logic of the control command pins based on a mask. This essentially means you can use
+// normally-closed switches on the specified pins, rather than the default normally-open switches.
+// NOTE: The top option will mask and invert all control pins. The bottom option is an example of
+// inverting only two control pins, the safety door and reset. See cpu_map.h for other macro definitions.
+// #define INVERT_CONTROL_PIN_MASK CONTROL_MASK // Default disabled. Uncomment to disable.
+// #define INVERT_CONTROL_PIN_MASK ((1<<CONTROL_SAFETY_DOOR_BIT)|(CONTROL_RESET_BIT)) // Default disabled.
 
-// NOTE: If you require individual control pins inverted, keep this macro disabled and simply alter
-//   the CONTROL_INVERT_MASK definition in cpu_map.h files.
-// #define INVERT_ALL_CONTROL_PINS // Default disabled. Uncomment to enable.
-
+// Inverts select limit pin states based on the following mask. This effects all limit pin functions, 
+// such as hard limits and homing. However, this is different from overall invert limits setting. 
+// This build option will invert only the limit pins defined here, and then the invert limits setting
+// will be applied to all of them. This is useful when a user has a mixed set of limit pins with both
+// normally-open(NO) and normally-closed(NC) switches installed on their machine.
+// NOTE: PLEASE DO NOT USE THIS, unless you have a situation that needs it.
+// #define INVERT_LIMIT_PIN_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)) // Default disabled.
 
 // Inverts the spindle enable pin from low-disabled/high-enabled to low-enabled/high-disabled. Useful
 // for some pre-built electronic boards.
@@ -167,13 +161,17 @@
 // uncomment the config option USE_SPINDLE_DIR_AS_ENABLE_PIN below.
 // #define INVERT_SPINDLE_ENABLE_PIN // Default disabled. Uncomment to enable.
 
+// Inverts the selected coolant pin from low-disabled/high-enabled to low-enabled/high-disabled. Useful
+// for some pre-built electronic boards.
+// #define INVERT_COOLANT_MIST_PIN // Default disabled. Uncomment to enable.
+// #define INVERT_COOLANT_FLOOD_PIN // Default disabled. Uncomment to enable.
+
 // Enable all pin states feedback in status reports. Configurable with Grbl settings to print only
 // the desired data, which is presented as simple binary reading of each pin as (0 (low) or 1(high)).
 // The fields are printed in a particular order and settings groups are separated by '|' characters. 
 // NOTE: This option is here for backward compatibility of the old style of pin state reports, i.e. 
 // `Lim:000`. This new `Pin:` report will be the standard going forward.
 #define REPORT_ALL_PIN_STATES // Default enabled. Comment to disable.
-
 
 // When Grbl powers-cycles or is hard reset with the Arduino reset button, Grbl boots up with no ALARM
 // by default. This is to make it as simple as possible for new users to start using Grbl. When homing
@@ -185,6 +183,10 @@
 
 // ---------------------------------------------------------------------------------------
 // ADVANCED CONFIGURATION OPTIONS:
+
+// Realtime reports will be altered soon, and the current proposed report may be used by commenting 
+// out the following define.
+#define USE_CLASSIC_REALTIME_REPORT // Will be disabled in upcoming releases.
 
 // Enables minimal reporting feedback mode for GUIs, where human-readable strings are not as important.
 // This saves nearly 2KB of flash space and may allow enough space to install other/future features.
@@ -212,8 +214,7 @@
 // check in the settings module to prevent settings values that will exceed this limitation. The maximum
 // step rate is strictly limited by the CPU speed and will change if something other than an AVR running
 // at 16MHz is used.
-// NOTE: For now disabled, will enable if flash space permits.
-// #define MAX_STEP_RATE_HZ 30000 // Hz
+#define MAX_STEP_RATE_HZ 30000 // Hz
 
 // By default, Grbl sets all input pins to normal-high operation with their internal pull-up resistors
 // enabled. This simplifies the wiring for users by requiring only a switch connected to ground, 
@@ -237,17 +238,6 @@
 // tool length offset value is subtracted from the current location.
 #define TOOL_LENGTH_OFFSET_AXIS Z_AXIS // Default z-axis. Valid values are X_AXIS, Y_AXIS, or Z_AXIS.
 
-// Enables variable spindle output voltage for different RPM values. On the Arduino Uno, the spindle
-// enable pin will output 5V for maximum RPM with 256 intermediate levels and 0V when disabled.
-// NOTE: IMPORTANT for Arduino Unos! When enabled, the Z-limit pin D11 and spindle enable pin D12 switch!
-// The hardware PWM output on pin D11 is required for variable spindle output voltages.
-#define VARIABLE_SPINDLE // Default enabled. Comment to disable.
-
-
-
-
-
-
 // Used by variable spindle output only. This forces the PWM output to a minimum duty cycle when enabled.
 // The PWM pin will still read 0V when the spindle is disabled. Most users will not need this option, but
 // it may be useful in certain scenarios. This minimum PWM settings coincides with the spindle rpm minimum
@@ -255,17 +245,6 @@
 // 0V for disabled and the voltage set by the minimum PWM for minimum rpm.
 // NOTE: Compute duty cycle at the minimum PWM by this equation: (% duty cycle)=(SPINDLE_MINIMUM_PWM/256)*100
 // #define SPINDLE_MINIMUM_PWM 5 // Default disabled. Uncomment to enable. Integer (0-255)
-
-// By default on a 328p(Uno), Grbl combines the variable spindle PWM and the enable into one pin to help 
-// preserve I/O pins. For certain setups, these may need to be separate pins. This configure option uses
-// the spindle direction pin(D13) as a separate spindle enable pin along with spindle speed PWM on pin D11. 
-// NOTE: This configure option only works with VARIABLE_SPINDLE enabled and a 328p processor (Uno). 
-// NOTE: With no direction pin, the spindle clockwise M4 g-code command will be removed. M3 and M5 still work.
-// NOTE: BEWARE! The Arduino bootloader toggles the D13 pin when it powers up. If you flash Grbl with
-// a programmer (you can use a spare Arduino as "Arduino as ISP". Search the web on how to wire this.), 
-// this D13 LED toggling should go away. We haven't tested this though. Please report how it goes!
-// #define USE_SPINDLE_DIR_AS_ENABLE_PIN // Default disabled. Uncomment to enable.
-
 
 // With this enabled, Grbl sends back an echo of the line it has received, which has been pre-parsed (spaces
 // removed, capitalized letters, no comments) and is to be immediately executed by Grbl. Echoes will not be 
@@ -329,7 +308,7 @@
 // available RAM, like when re-compiling for a Mega or Sanguino. Or decrease if the Arduino
 // begins to crash due to the lack of available RAM or if the CPU is having trouble keeping
 // up with planning new incoming motions as they are executed. 
-// #define BLOCK_BUFFER_SIZE 18  // Uncomment to override default in planner.h.
+// #define BLOCK_BUFFER_SIZE 36  // Uncomment to override default in planner.h.
 
 // Governs the size of the intermediary step segment buffer between the step execution algorithm
 // and the planner blocks. Each segment is set of steps executed at a constant velocity over a
@@ -337,7 +316,7 @@
 // block velocity profile is traced exactly. The size of this buffer governs how much step 
 // execution lead time there is for other Grbl processes have to compute and do their thing 
 // before having to come back and refill this buffer, currently at ~50msec of step moves.
-// #define SEGMENT_BUFFER_SIZE 6 // Uncomment to override default in stepper.h.
+// #define SEGMENT_BUFFER_SIZE 10 // Uncomment to override default in stepper.h.
 
 // Line buffer size from the serial input stream to be executed. Also, governs the size of 
 // each of the startup blocks, as they are each stored as a string of this size. Make sure
@@ -347,7 +326,7 @@
 // can be too small and g-code blocks can get truncated. Officially, the g-code standards 
 // support up to 256 characters. In future versions, this default will be increased, when 
 // we know how much extra memory space we can re-invest into this.
-// #define LINE_BUFFER_SIZE 80  // Uncomment to override default in protocol.h
+// #define LINE_BUFFER_SIZE 256  // Uncomment to override default in protocol.h
   
 // Serial send and receive buffer size. The receive buffer is often used as another streaming
 // buffer to store incoming blocks to be processed by Grbl when its ready. Most streaming
@@ -356,8 +335,14 @@
 // memory allows. The send buffer primarily handles messages in Grbl. Only increase if large
 // messages are sent and Grbl begins to stall, waiting to send the rest of the message.
 // NOTE: Buffer size values must be greater than zero and less than 256.
-// #define RX_BUFFER_SIZE 128 // Uncomment to override defaults in serial.h
-// #define TX_BUFFER_SIZE 64
+// #define RX_BUFFER_SIZE 256 // Uncomment to override defaults in serial.h
+// #define TX_BUFFER_SIZE 128
+
+// The maximum line length of a data string stored in EEPROM. Used by startup lines and build
+// info. This size differs from the LINE_BUFFER_SIZE as the EEPROM is usually limited in size.
+// NOTE: Be very careful when changing this value. Check EEPROM address locations to make sure
+// these string storage locations won't corrupt one another.
+// #define EEPROM_LINE_SIZE 80 // Uncomment to override defaults in settings.h
   
 // Toggles XON/XOFF software flow control for serial communications. Not officially supported
 // due to problems involving the Atmega8U2 USB-to-serial chips on current Arduinos. The firmware
@@ -395,9 +380,8 @@
 // uses the homing pull-off distance setting times the LOCATE_SCALAR to pull-off and re-engage
 // the limit switch.
 // NOTE: Both of these values must be greater than 1.0 to ensure proper function.
- #define HOMING_AXIS_SEARCH_SCALAR  1.1 // Uncomment to override defaults in limits.c.
- #define HOMING_AXIS_LOCATE_SCALAR  10.0 // Uncomment to override defaults in limits.c.
-
+#define HOMING_AXIS_SEARCH_SCALAR  1.1 // Uncomment to override defaults in limits.c.
+#define HOMING_AXIS_LOCATE_SCALAR  10.0 // Uncomment to override defaults in limits.c.
 
 // Enables and configures parking motion methods upon a safety door state. Primarily for OEMs
 // that desire this feature for their integrated machines. At the moment, Grbl assumes that 
@@ -422,6 +406,17 @@
 #define PARKING_PULLOUT_INCREMENT 5.0 // Spindle pull-out and plunge distance in mm. Incremental distance.
                                       // Must be positive value or equal to zero.
 
+// Enables and configures Grbl's sleep mode feature. If the spindle or coolant are powered and Grbl 
+// is not actively moving or receiving any commands, a sleep timer will start. If any data or commands
+// are received, the sleep timer will reset and restart until the above condition are not satisfied.
+// If the sleep timer elaspes, Grbl will immediately execute the sleep mode by shutting down the spindle
+// and coolant and entering a safe sleep state. If parking is enabled, Grbl will park the machine as
+// well. While in sleep mode, only a hard/soft reset will exit it and the job will be unrecoverable.
+// NOTE: Sleep mode is a safety feature, primarily to address communication disconnect problems. To 
+// keep Grbl from sleeping, employ a stream of '?' status report commands as a connection "heartbeat".
+#define SLEEP_ENABLE  // Default disabled. Uncomment to enable.
+#define SLEEP_DURATION 2.0 // Float (0.25 - 61.0) seconds before sleep mode is executed.
+
 
 // ---------------------------------------------------------------------------------------
 // COMPILE-TIME ERROR CHECKING OF DEFINE VALUES:
@@ -430,21 +425,219 @@
   #error "Required HOMING_CYCLE_0 not defined."
 #endif
 
-#if defined(USE_SPINDLE_DIR_AS_ENABLE_PIN) && !defined(VARIABLE_SPINDLE)
-  #error "USE_SPINDLE_DIR_AS_ENABLE_PIN may only be used with VARIABLE_SPINDLE enabled"
-#endif
-
-#if defined(USE_SPINDLE_DIR_AS_ENABLE_PIN) && !defined(CPU_MAP_ATMEGA328P)
-  #error "USE_SPINDLE_DIR_AS_ENABLE_PIN may only be used with a 328p processor"
-#endif
-
 #if defined(PARKING_ENABLE)
   #if defined(HOMING_FORCE_SET_ORIGIN)
     #error "HOMING_FORCE_SET_ORIGIN is not supported with PARKING_ENABLE at this time."
   #endif
 #endif
 
-// ---------------------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------------------
+   OEM Single File Configuration Option
+   
+   Instructions: Paste the cpu_map and default setting definitions below without an enclosing
+   #ifdef. Comment out the CPU_MAP_xxx and DEFAULT_xxx defines at the top of this file, and
+   the compiler will ignore the contents of defaults.h and cpu_map.h and use the definitions
+   below.
+*/
 
+// Paste CPU_MAP definitions here.
+#define CARVIN           // Setting this allows other modules to conditionally compile for CARVIN
+//#define CARVIN_DEBUG     // can be used to include debugging print statements
+  
+  
+// Serial port pins
+#define SERIAL_RX USART0_RX_vect
+#define SERIAL_UDRE USART0_UDRE_vect
+
+
+// Define step pulse output pins. NOTE: All step bit pins must be on the same port.
+#define STEP_DDR      DDRA
+#define STEP_PORT     PORTA
+#define STEP_PIN      PINA
+#define X_STEP_BIT    5
+#define Y_STEP_BIT    6
+#define Z_STEP_BIT    7
+#define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
+
+// Define step direction output pins. NOTE: All direction pins must be on the same port.
+#define DIRECTION_DDR      DDRA
+#define DIRECTION_PORT     PORTA
+#define DIRECTION_PIN      PINA
+#define X_DIRECTION_BIT   2
+#define Y_DIRECTION_BIT   3
+#define Z_DIRECTION_BIT   4
+#define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
+
+
+
+
+// Define stepper driver enable/disable output pin.
+#define STEPPERS_DISABLE_DDR   DDRH
+#define STEPPERS_DISABLE_PORT  PORTH
+#define STEPPERS_DISABLE_BIT   7 
+#define STEPPERS_DISABLE_MASK (1<<STEPPERS_DISABLE_BIT)
+
+
+//  ========================  Start of PWM Ports ======================= 
+#define BUTTON_LED_DDR      DDRH  // H3 is Timer 4
+#define BUTTON_LED_PORT     PORTH
+#define BUTTON_LED_BIT      3  
+#define BUTTON_LED_OCR 	  OCR4A
+
+// DOOR LED ============
+// door LED is defined on deferent ports on the 2 versions of hardware  
+
+#define DOOR_LED_DDR     DDRH  // name the direction register
+#define DOOR_LED_PORT    PORTH // name the port register
+#define DOOR_LED_BIT     4   // what bit on the port is it?
+#define DOOR_LED_OCR     OCR4B // the value of the duty cycle
+#define DOOR_LED_MAX     1023
+
+
+// this is used for the hardware ID function
+// These pins are hardwired to either Gnd or 5V 
+// Each new rev of hardware gets a new ID
+#define HRDW_ID_DDR	     DDRC
+#define HRDW_ID_PORT     PORTC
+#define HRDW_ID_PIN      PINC
+#define HRDW_ID_0	     3 		
+#define HRDW_ID_1        4
+#define HRDW_ID_2        5
+#define HRDW_ID_3        6
+#define HRDW_ID_4        7
+#define HRDW_ID_MASK     (1<<HRDW_ID_0 | 1<<HRDW_ID_1 | 1<<HRDW_ID_2 | 1<<HRDW_ID_3 | 1<<HRDW_ID_4) 
+
+
+#define SPINDLE_LED_DDR     DDRH
+#define SPINDLE_LED_PORT    PORTH
+#define SPINDLE_LED_BIT     5     // H5 is Timer 4
+#define SPINDLE_LED_OCR     OCR4C
+//  ========================  End of PWM Ports ======================= 
+
+// NOTE: All limit bit pins must be on the same port
+#define LIMIT_DDR       DDRB
+#define LIMIT_PORT      PORTB
+#define LIMIT_PIN       PINB
+#define X_LIMIT_BIT     4
+#define Y_LIMIT_BIT     5
+#define Z_LIMIT_BIT     6
+#define LIMIT_INT       PCIE0  // Pin change interrupt enable pin
+#define LIMIT_INT_vect  PCINT0_vect 
+#define LIMIT_PCMSK     PCMSK0 // Pin change interrupt register
+#define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
+
+// Define spindle enable and spindle direction output pins.
+#define SPINDLE_ENABLE_DDR   DDRH
+#define SPINDLE_ENABLE_PORT  PORTH
+#define SPINDLE_ENABLE_BIT   6 
+#define SPINDLE_DIRECTION_DDR   DDRE
+#define SPINDLE_DIRECTION_PORT  PORTE
+#define SPINDLE_DIRECTION_BIT   3
+
+
+
+// These are not actually used
+#define COOLANT_FLOOD_DDR   DDRG
+#define COOLANT_FLOOD_PORT  PORTG
+#define COOLANT_FLOOD_BIT   5
+#define COOLANT_MIST_DDR    DDRJ
+#define COOLANT_MIST_PORT   PORTJ
+#define COOLANT_MIST_BIT    1 // MEGA2560 Digital Pin 9
+
+// control i/o
+#define CONTROL_DDR       DDRK
+#define CONTROL_PIN       PINK
+#define CONTROL_PORT      PORTK
+#define CONTROL_RESET_BIT       0  // Not Used
+#define CONTROL_FEED_HOLD_BIT   5  // Not Used
+#define CONTROL_CYCLE_START_BIT 2 // front button
+#define CONTROL_SAFETY_DOOR_BIT 1 // door
+#define CLAMP_CHECK_BIT   4   // clamp check not used
+#define CONTROL_INT       PCIE2  // Pin change interrupt enable pin
+#define CONTROL_INT_vect  PCINT2_vect
+#define CONTROL_PCMSK     PCMSK2 // Pin change interrupt register
+
+
+// all these switches use pull ups the "normal" is high or inverted    
+#define CONTROL_MASK      	((1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))  // the mask of all switches
+#define INVERT_CONTROL_PIN_MASK 	((1<<CONTROL_CYCLE_START_BIT)) // the mask of ones that are inverted.
+
+//#define CONTROL_INVERT_MASK   CONTROL_MASK // May be re-defined to only invert certain control pins.
+
+
+// Define probe switch input pin.  (Probe is smart clamp in gCarvin)
+#define PROBE_DDR       DDRK
+#define PROBE_PIN       PINK
+#define PROBE_PORT      PORTK
+#define PROBE_BIT       3    // smart clamp
+#define PROBE_MASK      (1<<PROBE_BIT)
+
+    
+// this is spindle control stuff
+#define TCCRA_REGISTER		TCCR2A
+#define TCCRB_REGISTER		TCCR2B
+#define SPINDLE_MOTOR_OCR	OCR2B
+
+#define COMB_BIT			COM2B1
+#define WAVE0_REGISTER		WGM20
+#define WAVE1_REGISTER		WGM21
+#define WAVE2_REGISTER		WGM22
+#define WAVE3_REGISTER		WGM23
+
+#define SPINDLE_PWM_MAX_VALUE 255
+//#define PWM_MAX_VALUE 255    // timer2 on a mega2650 is an 8 bit timer
+#define SPINDLE_PWM_DDR		DDRH
+#define SPINDLE_PWM_PORT    PORTH
+#define SPINDLE_PWM_BIT		6
+
+// spindle need a soft start to prevent drawing too much current
+#define SPINDLE_SPINUP_RATE 2  // seconds
+#define SPINDLE_SPINDOWN_RATE 3  // seconds
+#define EXTEND_SPINDLE_LED_FADE 2 // seconds - it looks a little better if the cross fade associated with the spindle lasts a little longer
+
+#define DEFAULT_G28_X  -282.5
+#define DEFAULT_G28_Y  -199.5
+#define DEFAULT_G28_Z  -1.0
+#define DEFAULT_G30_X  -150.0
+#define DEFAULT_G30_Y  -10.0
+#define DEFAULT_G30_Z  -1.0
+
+// Paste default settings definitions here.
+
+// Carvey Default Settings
+#define DEFAULT_X_STEPS_PER_MM 88.889
+#define DEFAULT_Y_STEPS_PER_MM 88.889
+#define DEFAULT_Z_STEPS_PER_MM 377.893  // or 5120 (for older m8 rods)
+#define DEFAULT_X_MAX_RATE 5000.0 // mm/min
+#define DEFAULT_Y_MAX_RATE 5000.0 // mm/min
+#define DEFAULT_Z_MAX_RATE 800.0 // mm/min
+#define DEFAULT_X_ACCELERATION (500.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2
+#define DEFAULT_Y_ACCELERATION (500.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2
+#define DEFAULT_Z_ACCELERATION (60.0*60*60) // 10*60*60 mm/min^2 = 10 mm/sec^2
+#define DEFAULT_X_MAX_TRAVEL 300.0 // mm
+#define DEFAULT_Y_MAX_TRAVEL 203.2 // mm
+#define DEFAULT_Z_MAX_TRAVEL 80.0 // mm
+#define DEFAULT_SPINDLE_RPM_MAX 12000.0 // rpm
+#define DEFAULT_SPINDLE_RPM_MIN 0.0 // rpm
+#define DEFAULT_STEP_PULSE_MICROSECONDS 10
+#define DEFAULT_STEPPING_INVERT_MASK 0
+#define DEFAULT_DIRECTION_INVERT_MASK 0 // was ((1<<X_AXIS) | (1<<Y_AXIS) | (1<<Z_AXIS)) on GEN1
+#define DEFAULT_STEPPER_IDLE_LOCK_TIME 255 // msec (0-254, 255 keeps steppers enabled)
+#define DEFAULT_STATUS_REPORT_MASK ((BITFLAG_RT_STATUS_MACHINE_POSITION)|(BITFLAG_RT_STATUS_WORK_POSITION))
+#define DEFAULT_JUNCTION_DEVIATION 0.02 // mm
+#define DEFAULT_ARC_TOLERANCE 0.002 // mm
+#define DEFAULT_REPORT_INCHES 0 // false
+#define DEFAULT_AUTO_START 1 // true
+#define DEFAULT_INVERT_ST_ENABLE 0 // false
+#define DEFAULT_INVERT_LIMIT_PINS 0 // false
+#define DEFAULT_SOFT_LIMIT_ENABLE 0 // false
+#define DEFAULT_HARD_LIMIT_ENABLE 0  // false
+#define DEFAULT_HOMING_ENABLE 1  // false
+#define DEFAULT_HOMING_DIR_MASK ((1<<X_AXIS)|(1<<Y_AXIS))
+#define DEFAULT_HOMING_FEED_RATE 75.0 // mm/min
+#define DEFAULT_HOMING_SEEK_RATE 1500.0 // mm/min
+#define DEFAULT_HOMING_DEBOUNCE_DELAY 250 // msec (0-65k)
+#define DEFAULT_HOMING_PULLOFF 4.0 // mm
+#define DEFAULT_SPINDLE_I_MAX SPINDLE_I_SETTING_MAX // Amps
 
 #endif
