@@ -393,7 +393,7 @@ void protocol_exec_rt_system()
             sys.state = STATE_IDLE;
           }
 		  #ifdef CARVIN		    
-		    set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+		    set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);			
 		  #endif
         }
       }    

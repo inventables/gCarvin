@@ -92,8 +92,8 @@ void carvin_init()
   init_pwm(&spindle_motor);
   
   // fade on the button and door LEDs at startup	
-  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
-  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
+  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,DOOR_LED_RISE_TIME);
 	
   setTMC26xRunCurrent(1);
 	
@@ -195,7 +195,7 @@ void set_pwm(struct pwm_analog * pwm, uint8_t target_level, uint8_t duration)
 */
 void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration)
 {		
-	//(* pwm).current_level = 0;
+	(* pwm).current_level = 0;
 	(* pwm).duration = duration;	
 	(* pwm).throb = true;	
 	(* pwm).target = LED_FULL_ON;
@@ -253,10 +253,12 @@ void set_button_led()
 {
 	if ((sys.state == STATE_HOLD) || (sys.state == STATE_SAFETY_DOOR))
 	{
-		throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
+		throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);		
 	}
 	else
-		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+	{
+		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+	}
 }
 
 /*  

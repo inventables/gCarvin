@@ -273,16 +273,16 @@ uint8_t system_execute_line(char *line)
 		case 'L':
 		    if(line[++char_counter] == '1')
 			{
-				throb_pwm(&button_led, BUTTON_LED_THROB_MIN,2);
-				throb_pwm(&door_led, DOOR_LED_THROB_MIN,2);
+				throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);
+				throb_pwm(&door_led, DOOR_LED_THROB_MIN,DOOR_SLEEP_THROB_RATE);
 				throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
 			}
 			else
 			{
 				//turn all LEDS off
-				set_pwm(&button_led, 0,4);
-				set_pwm(&door_led, 0,4);
-				set_pwm(&spindle_led, 0,4);
+				set_pwm(&button_led, 0,BUTTON_LED_RISE_TIME);
+				set_pwm(&door_led, 0,DOOR_LED_RISE_TIME);
+				set_pwm(&spindle_led, 0,SPINDLE_LED_RISE_TIME);
 			}
 		break;
 		
