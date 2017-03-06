@@ -22,8 +22,8 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "1.1.5" // changed defaults, LED levels and parking pullout speeds
-#define GRBL_VERSION_BUILD "20151216"
+#define GRBL_VERSION "2.0.0-alpha"
+#define GRBL_VERSION_BUILD "20170303"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
