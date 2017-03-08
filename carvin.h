@@ -46,18 +46,18 @@ struct pwm_analog{
   unsigned char throb_min;     // what is the minimum brightness of the throb.  It can look harsh if it goes off or nearly off
 };
 
-void carvin_init();
+extern void carvin_init();
 
 // functions to work with the LEDs
 void init_pwm(struct pwm_analog * led);
-void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
+extern void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
 int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is needed
 
+extern void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration);
 
+extern void print_switch_states();
 
-void print_switch_states();
-
-void reset_cpu();   // software full reset of the CPU
+extern void reset_cpu();   // software full reset of the CPU
 
 // the LEDs
 struct pwm_analog button_led;

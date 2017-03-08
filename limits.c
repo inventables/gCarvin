@@ -72,10 +72,10 @@ uint8_t limits_get_state()
   uint8_t pin = (LIMIT_PIN & LIMIT_MASK);
   if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { pin ^= LIMIT_MASK; }
   if (pin) {  
-	uint8_t idx;
-	for (idx=0; idx<N_AXIS; idx++) {
-	  if (pin & get_limit_pin_mask(idx)) { limit_state |= (1 << idx); }
-	}
+    uint8_t idx;
+    for (idx=0; idx<N_AXIS; idx++) {
+      if (pin & get_limit_pin_mask(idx)) { limit_state |= (1 << idx); }
+    }
   }
   return(limit_state);
 }
@@ -240,7 +240,7 @@ void limits_go_home(uint8_t cycle_mask)
 		} 
 	  }
 
-	} while (STEP_MASK & axislock);
+    } while (STEP_MASK & axislock);
 
     st_reset(); // Immediately force kill steppers and reset step segment buffer.
     plan_reset(); // Reset planner buffer to zero planner current position and to clear previous motions.

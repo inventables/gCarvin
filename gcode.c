@@ -627,7 +627,8 @@ uint8_t gc_execute_line(char *line)
           if (!axis_words) { axis_command = AXIS_COMMAND_NONE; } // Set to none if no intermediate motion.
           if (!settings_read_coord_data(SETTING_INDEX_G30,parameter_data)) { FAIL(STATUS_SETTING_READ_FAIL); }
           break;
-        case NON_MODAL_SET_HOME_0: case NON_MODAL_SET_HOME_1:
+        case NON_MODAL_SET_HOME_0: // G28.1
+        case NON_MODAL_SET_HOME_1: // G30.1
           // [G28.1/30.1 Errors]: Cutter compensation is enabled. 
           // NOTE: If axis words are passed here, they are interpreted as an implicit motion mode.
           break;

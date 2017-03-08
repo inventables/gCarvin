@@ -341,7 +341,7 @@ void report_gcode_modes()
     case MOTION_MODE_NONE : printPgmString(PSTR("G80")); break;
     default: 
       printPgmString(PSTR("G38."));
-      print_uint8_base10(gc_state.modal.motion - (MOTION_MODE_PROBE_TOWARD+2));
+      print_uint8_base10(gc_state.modal.motion - (MOTION_MODE_PROBE_TOWARD-2));
   }
 
   printPgmString(PSTR(" G"));
@@ -504,8 +504,7 @@ void report_realtime_status()
     // Report realtime rate 
     printPgmString(PSTR(",F:")); 
     printFloat_RateValue(st_get_realtime_rate());
-  #endif 
-  
+  #endif    
   
   #ifdef REPORT_ALL_PIN_STATES
     if (bit_istrue(settings.status_report_mask,
@@ -530,10 +529,6 @@ void report_realtime_status()
       print_unsigned_int8(limits_get_state(),2,N_AXIS);
     }
   #endif
-  
-  
-  
-  
   
   printPgmString(PSTR(">\r\n"));
 }

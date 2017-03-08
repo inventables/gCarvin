@@ -2,7 +2,6 @@
 #include "spi.h"
 #include "grbl.h"
 
-void tmc26x_init();
 void setTMC26xRunCurrent(uint8_t);
 
 uint32_t setTMC26xCHOPCONF(uint8_t blankingTime, uint8_t chopModeStd, uint8_t randomTimeOff);

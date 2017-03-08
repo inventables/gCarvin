@@ -22,8 +22,12 @@
 #ifndef nuts_bolts_h
 #define nuts_bolts_h
 
+#ifndef false
 #define false 0
+#endif
+#ifndef true
 #define true 1
+#endif
 
 // Axis array index values. Must start with 0 and be continuous.
 #define N_AXIS 3 // Number of axes
@@ -51,11 +55,17 @@
 #define clear_vector(a) memset(a, 0, sizeof(a))
 #define clear_vector_float(a) memset(a, 0.0, sizeof(float)*N_AXIS)
 // #define clear_vector_long(a) memset(a, 0.0, sizeof(long)*N_AXIS)
+#ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+#ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
 
 // Bit field and masking macros
-#define bit(n) (1 << n) 
+#ifndef bit
+#define bit(n) (1 << n)
+#endif
 #define bit_true_atomic(x,mask) {uint8_t sreg = SREG; cli(); (x) |= (mask); SREG = sreg; }
 #define bit_false_atomic(x,mask) {uint8_t sreg = SREG; cli(); (x) &= ~(mask); SREG = sreg; }
 #define bit_toggle_atomic(x,mask) {uint8_t sreg = SREG; cli(); (x) ^= (mask); SREG = sreg; }

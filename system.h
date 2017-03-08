@@ -69,7 +69,7 @@
 #define SUSPEND_SAFETY_DOOR_AJAR  bit(5) // Indicates suspend was initiated by a safety door state.
 #define SUSPEND_MOTION_CANCEL     bit(6) // Indicates a canceled resume motion. Currently used by probing routine.
 
-
+// Define step segment generator state flags.
 #define STEP_CONTROL_NORMAL_OP              0
 // #define STEP_CONTROL_RECOMPUTE_ACTIVE_BLOCK bit(0)
 #define STEP_CONTROL_END_MOTION             bit(1)
@@ -90,6 +90,7 @@
   #define CONTROL_PIN_INDEX_CYCLE_START   bit(2)
 #endif
 
+
 // Define global system variables
 typedef struct {
   uint8_t abort;                 // System abort flag. Forces exit back to main loop for reset.
@@ -103,10 +104,11 @@ typedef struct {
   int32_t position[N_AXIS];      // Real-time machine (aka home) position vector in steps. 
                                  // NOTE: This may need to be a volatile variable, if problems arise.                             
 
-  uint8_t homing_axis_lock;       // Locks axes when limits engage. Used as an axis motion mask in the stepper ISR.
+  
   volatile uint8_t probe_state;   // Probing state value.  Used to coordinate the probing cycle with stepper ISR.
   int32_t probe_position[N_AXIS]; // Last probe position in machine coordinates and steps.
   uint8_t probe_succeeded;        // Tracks if last probing cycle was successful.
+  uint8_t homing_axis_lock;       // Locks axes when limits engage. Used as an axis motion mask in the stepper ISR.
 } system_t;
 extern system_t sys;
 

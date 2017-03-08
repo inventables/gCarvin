@@ -154,11 +154,9 @@
 
 // Inverts pin logic of the control command pins. This essentially means when this option is enabled
 // you can use normally-closed switches, rather than the default normally-open switches.
-
 // NOTE: If you require individual control pins inverted, keep this macro disabled and simply alter
 //   the CONTROL_INVERT_MASK definition in cpu_map.h files.
 // #define INVERT_ALL_CONTROL_PINS // Default disabled. Uncomment to enable.
-
 
 // Inverts the spindle enable pin from low-disabled/high-enabled to low-enabled/high-disabled. Useful
 // for some pre-built electronic boards.
@@ -173,7 +171,6 @@
 // NOTE: This option is here for backward compatibility of the old style of pin state reports, i.e. 
 // `Lim:000`. This new `Pin:` report will be the standard going forward.
 #define REPORT_ALL_PIN_STATES // Default enabled. Comment to disable.
-
 
 // When Grbl powers-cycles or is hard reset with the Arduino reset button, Grbl boots up with no ALARM
 // by default. This is to make it as simple as possible for new users to start using Grbl. When homing
@@ -243,11 +240,6 @@
 // The hardware PWM output on pin D11 is required for variable spindle output voltages.
 #define VARIABLE_SPINDLE // Default enabled. Comment to disable.
 
-
-
-
-
-
 // Used by variable spindle output only. This forces the PWM output to a minimum duty cycle when enabled.
 // The PWM pin will still read 0V when the spindle is disabled. Most users will not need this option, but
 // it may be useful in certain scenarios. This minimum PWM settings coincides with the spindle rpm minimum
@@ -265,7 +257,6 @@
 // a programmer (you can use a spare Arduino as "Arduino as ISP". Search the web on how to wire this.), 
 // this D13 LED toggling should go away. We haven't tested this though. Please report how it goes!
 // #define USE_SPINDLE_DIR_AS_ENABLE_PIN // Default disabled. Uncomment to enable.
-
 
 // With this enabled, Grbl sends back an echo of the line it has received, which has been pre-parsed (spaces
 // removed, capitalized letters, no comments) and is to be immediately executed by Grbl. Echoes will not be 
