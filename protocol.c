@@ -52,7 +52,7 @@ void protocol_main_loop()
     // All systems go! But first check for safety door.
     sys.state = STATE_IDLE;
     if (system_check_safety_door_ajar()) {
-      bit_true(sys.rt_exec_state, EXEC_SAFETY_DOOR);
+      bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
       protocol_execute_realtime(); // Enter safety door mode. Should return as IDLE state.
     } 
     system_execute_startup(line); // Execute startup script.
@@ -191,7 +191,7 @@ void protocol_buffer_synchronize()
 // when one of these conditions exist respectively: There are no more blocks sent (i.e. streaming 
 // is finished, single commands), a command that needs to wait for the motions in the buffer to 
 // execute calls a buffer sync, or the planner buffer is full and ready to go.
-void protocol_auto_cycle_start() { bit_true_atomic(sys.rt_exec_state, EXEC_CYCLE_START); } 
+void protocol_auto_cycle_start() { system_set_exec_state_flag(EXEC_CYCLE_START); } 
 
 
 // This function is the general interface to Grbl's real-time command execution system. It is called
@@ -203,7 +203,7 @@ void protocol_auto_cycle_start() { bit_true_atomic(sys.rt_exec_state, EXEC_CYCLE
 // handles them, removing the need to define more computationally-expensive volatile variables. This
 // also provides a controlled way to execute certain tasks without having two or more instances of 
 // the same task, such as the planner recalculating the buffer upon a feedhold or overrides.
-// NOTE: The sys.rt_exec_state variable flags are set by any process, step or serial interrupts, pinouts,
+// NOTE: The sys_rt_exec_state variable flags are set by any process, step or serial interrupts, pinouts,
 // limit switches, or the main program.
 void protocol_execute_realtime()
 {
@@ -218,7 +218,7 @@ void protocol_execute_realtime()
 void protocol_exec_rt_system()
 {
   uint8_t rt_exec; // Temp variable to avoid calling volatile multiple times.
-  rt_exec = sys.rt_exec_alarm; // Copy volatile sys.rt_exec_alarm.
+  rt_exec = sys_rt_exec_alarm; // Copy volatile sys_rt_exec_alarm.
   if (rt_exec) { // Enter only if any bit flag is true
     // System alarm. Everything has shutdown by something that has gone severely wrong. Report
     // the source of the error to the user. If critical, Grbl disables by entering an infinite
@@ -238,7 +238,7 @@ void protocol_exec_rt_system()
     // Halt everything upon a critical event flag. Currently hard and soft limits flag this.
     if (rt_exec & EXEC_CRITICAL_EVENT) {
       report_feedback_message(MESSAGE_CRITICAL_EVENT);
-      bit_false_atomic(sys.rt_exec_state,EXEC_RESET); // Disable any existing reset
+      system_clear_exec_state_flag(EXEC_RESET); // Disable any existing reset
       do {       
         // Block everything, except reset and status reports, until user issues reset or power 
         // cycles. Hard limits typically occur while unattended or not paying attention. Gives 
@@ -247,17 +247,17 @@ void protocol_exec_rt_system()
         // lost, streaming could cause a serious crash if it continues afterwards.
         
 // TODO: Allow status reports during a critical alarm. Still need to think about implications of this.
-        // if (sys.rt_exec_state & EXEC_STATUS_REPORT) { 
+        // if (sys_rt_exec_state & EXEC_STATUS_REPORT) { 
         //   report_realtime_status();
-        //   bit_false_atomic(sys.rt_exec_state,EXEC_STATUS_REPORT); 
+        //   system_clear_exec_state_flag(EXEC_STATUS_REPORT); 
         // }
 
-      } while (bit_isfalse(sys.rt_exec_state,EXEC_RESET));
+      } while (bit_isfalse(sys_rt_exec_state,EXEC_RESET));
     }
-    bit_false_atomic(sys.rt_exec_alarm,0xFF); // Clear all alarm flags
+    system_clear_exec_alarm_flag(0xFF); // Clear all alarm flags
   }
   
-  rt_exec = sys.rt_exec_state; // Copy volatile sys.rt_exec_state.
+  rt_exec = sys_rt_exec_state; // Copy volatile sys_rt_exec_state.
   if (rt_exec) {
   
     // Execute system abort. 
@@ -269,7 +269,7 @@ void protocol_exec_rt_system()
     // Execute and serial print status
     if (rt_exec & EXEC_STATUS_REPORT) { 
       report_realtime_status();
-      bit_false_atomic(sys.rt_exec_state,EXEC_STATUS_REPORT);
+      system_clear_exec_state_flag(EXEC_STATUS_REPORT);
     }
   
     // NOTE: The math involved to calculate the hold should be low enough for most, if not all, 
@@ -341,7 +341,7 @@ void protocol_exec_rt_system()
      
       }
   
-      bit_false_atomic(sys.rt_exec_state,(EXEC_MOTION_CANCEL | EXEC_FEED_HOLD | EXEC_SAFETY_DOOR));      
+      system_clear_exec_state_flag((EXEC_MOTION_CANCEL | EXEC_FEED_HOLD | EXEC_SAFETY_DOOR));      
     }
     
     // Execute a cycle start by starting the stepper interrupt to begin executing the blocks in queue.
@@ -378,11 +378,13 @@ void protocol_exec_rt_system()
               sys.suspend = SUSPEND_DISABLE; // Break suspend state.
               sys.state = STATE_IDLE;
             }
+            #ifdef CARVIN
 			set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+            #endif
           }
         }
       }    
-      bit_false_atomic(sys.rt_exec_state,EXEC_CYCLE_START);
+      system_clear_exec_state_flag(EXEC_CYCLE_START);
     }
     
     if (rt_exec & EXEC_CYCLE_STOP) {
@@ -401,7 +403,7 @@ void protocol_exec_rt_system()
         sys.suspend = SUSPEND_DISABLE;
         sys.state = STATE_IDLE;
       }  
-      bit_false_atomic(sys.rt_exec_state,EXEC_CYCLE_STOP);
+      system_clear_exec_state_flag(EXEC_CYCLE_STOP);
     }
   }
   
@@ -497,7 +499,9 @@ static void protocol_exec_rt_suspend()
         if (sys.state == STATE_SAFETY_DOOR) {
           if (!(system_check_safety_door_ajar())) {
             sys.state = STATE_HOLD; // Update to HOLD state to indicate door is closed and ready to resume.
+            #ifdef CARVIN
 			throb_pwm(&button_led, 40,BUTTON_LED_THROB_RATE);
+            #endif
           }
         }
         
@@ -547,7 +551,7 @@ static void protocol_exec_rt_suspend()
           
           if (bit_isfalse(sys.suspend,SUSPEND_RESTART_RETRACT)) {
             sys.suspend |= SUSPEND_RESTORE_COMPLETE;
-            bit_true_atomic(sys.rt_exec_state,EXEC_CYCLE_START); // Set to resume program.
+            system_set_exec_state_flag(EXEC_CYCLE_START); // Set to resume program.
           }
         }
    

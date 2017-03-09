@@ -22,8 +22,7 @@
    types, i.e. AVR 328p or AVR Mega 2560. Grbl officially supports the Arduino Uno, but the 
    other supplied pin mappings are supplied by users, so your results may vary. */
 
-// NOTE: This is still a work in progress. We are still centralizing the configurations to
-// this file, so your success may vary for other CPUs.
+// NOTE: With new processors, only add the define name and filename to use.
 
 #ifndef cpu_map_h
 #define cpu_map_h

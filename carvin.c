@@ -1,7 +1,7 @@
 /*
   carvin.c - Handles Carvin Controller specific items
-  
-  Copyright (c) 2014,2015 Bart Dring / Inventables  
+
+  Copyright (c) 2014,2015 Bart Dring / Inventables
 
 */
 
@@ -17,27 +17,27 @@ int control_button_counter = 0;  // initialize this for use in button debouncing
 // setup routine for a Carvin Controller
 void carvin_init()
 {
-  
+
 	
- 
-  
+
+
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
-  
- 
+
+
   #ifdef GEN1_HARDWARE
     STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
 	set_stepper_current(0);
   #endif
-  
+
   #ifdef GEN2_HARDWARE
 	tmc26x_init();  // SPI functions to program the chips
   #endif
 	
 
-  
+
 	// -------------- Setup PWM on Timer 4 ------------------------------
 	
   //  Setup PWM For LEDs
@@ -54,36 +54,36 @@ void carvin_init()
   //  --------- Timer 3 ... it controls the following pins ----------
   //  PORTE BIT 3, OCR3A (stepper driver current)
   //  PORTE BIT4, OCR3B (Door Light)  !!!! schem error
-  
+
 	TCCR3A = (1<<COM3A1) | (1<<COM3B1) | (1<<WGM31) | (1<<WGM30);
   TCCR3B = (TCCR3B & 0b11111000) | 0x02; // set to 1/8 Prescaler
   //  Set initial duty cycle
   DOOR_LED_OCR = 0;
 	
 	
-  
-  
+
+
   // ---------------- TIMER5 ISR SETUP --------------------------
-  
+
   // Setup a timer5 interrupt to handle timing of things like LED animations and spindle soft start in the background
   TCCR5A = 0;     // Clear entire TCCR1A register
   TCCR5B = 0;     // Clear entire TCCR1B register
-  
+
   TCCR5B |= (1 << WGM52);  // turn on CTC mode:
-  TCCR5B |= (1 << CS52);   // divide clock/256 
-  
+  TCCR5B |= (1 << CS52);   // divide clock/256
+
   OCR5A = CARVIN_TIMING_CTC;  // set compare match register to desired timer count:
-  
+
   TIMSK5 |= (1 << OCIE5A);  // enable timer compare interrupt (grbl turns on interrupts)
-  
+
   // ----------------Initial LED SETUP -----------------------------
-  
+
   // setup LEDs and spindle
   init_pwm(&button_led);
   init_pwm(&door_led);
   init_pwm(&spindle_led);
   init_pwm(&spindle_motor);
-  
+
   // fade on the button and door LEDs at startup	
   set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
   set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
@@ -109,35 +109,39 @@ ISR(TIMER5_COMPA_vect)
 {
   // see if the led values need to change
 	if (pwm_level_change(&button_led))
+	{
 	  BUTTON_LED_OCR = button_led.current_level;
-		
+	}
+	
 	if (pwm_level_change(&door_led))
-	  DOOR_LED_OCR = door_led.current_level;
-		
+	{
+		DOOR_LED_OCR = door_led.current_level;
+    }
 	if (pwm_level_change(&spindle_led))
-	  SPINDLE_LED_OCR = spindle_led.current_level;
-  
+	{
+		SPINDLE_LED_OCR = spindle_led.current_level;
+	}
+
     if (pwm_level_change(&spindle_motor))
-	  SPINDLE_MOTOR_OCR = spindle_motor.current_level;
-  
-  
+	{
+		SPINDLE_MOTOR_OCR = spindle_motor.current_level;
+	}
+
     if (control_button_counter > 0)
 	{
 		control_button_counter--;
 		if (control_button_counter == 0)
 			checkControlPins();
 	}
-	
-	
 }
 
 // init or reset the led values
 void init_pwm(struct pwm_analog * pwm)
 {
-  (* pwm).current_level = 0;   
-  (* pwm).duration = 0;        
-  (* pwm).dur_counter = 0;     
-  (* pwm).throb = 0;					 
+  (* pwm).current_level = 0;
+  (* pwm).duration = 0;
+  (* pwm).dur_counter = 0;
+  (* pwm).throb = 0;					
   (* pwm).throb_min = 0;
   (* pwm).target = 0;
 }
@@ -174,7 +178,7 @@ int pwm_level_change(struct pwm_analog * pwm)
 		return false;
 	
 	// if duration is 0, change the level right away
-	if ((* pwm).duration == 0)  
+	if ((* pwm).duration == 0)
 	{
 		(* pwm).current_level = (* pwm).target;
 		return true;
@@ -204,7 +208,7 @@ int pwm_level_change(struct pwm_analog * pwm)
 				
 		(* pwm).dur_counter = (* pwm).duration;  // reset the duration counter
 		return true;
-	 
+	
   }
 	
 	return false;
@@ -216,13 +220,13 @@ void set_stepper_current(float current)
 {
 	
   float vref = 0;
-  
+
   // current = VREF /(8× RS)  from driver datasheet
-  vref = current * (8 * I_SENSE_RESISTOR);  
- 
+  vref = current * (8 * I_SENSE_RESISTOR);
+
   // vref goes through a resistor dividor that cuts the voltage in half
   vref = (vref /2.5) * 1023 / 2;
-  
+
   STEPPER_VREF_OCR = (int)vref;
 }
 #endif
@@ -231,7 +235,7 @@ void set_stepper_current(float current)
 /*
  This is a software driver hard reset using the watchdog timer
  Make sure your bootloader is compatible with a WDT.  Some do not reset the WDT
- and you can get stuck in a WDT reboot loop. 
+ and you can get stuck in a WDT reboot loop.
  */
 void reset_cpu()
 {

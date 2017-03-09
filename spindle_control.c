@@ -20,10 +20,13 @@
 */
 
 #include "grbl.h"
+#include "carvin.h"
 
 
 void spindle_init()
-{    
+{
+#ifdef CARVIN
+  // use carvin set_pwm to control variable speed spindle
   SPINDLE_PWM_DDR |= (1<<SPINDLE_PWM_BIT); // Configure as PWM output pin.
   
   // setup PWM
@@ -32,60 +35,149 @@ void spindle_init()
     
   // start with spindle off
   set_pwm(&spindle_motor, 0,0);
+#else
+  #ifdef VARIABLE_SPINDLE
+
+    // Configure variable spindle PWM and enable pin, if requried. On the Uno, PWM and enable are
+    // combined unless configured otherwise.
+    SPINDLE_PWM_DDR |= (1<<SPINDLE_PWM_BIT); // Configure as PWM output pin.
+    TCCRA_REGISTER = TCCRA_INIT_MASK; // Configure PWM output compare timer
+    TCCRB_REGISTER = TCCRB_INIT_MASK;
+    #ifdef CPU_MAP_ATMEGA2560
+      OCRA_REGISTER = OCRA_TOP_VALUE; // Set the top value for 16-bit fast PWM mode
+      SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT); // Configure as output pin.
+      SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); // Configure as output pin.
+    #else // Otherwise 328p
+      #ifdef USE_SPINDLE_DIR_AS_ENABLE_PIN
+        SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT); // Configure as output pin.
+      #else 
+        SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); // Configure as output pin.
+      #endif
+    #endif     
+  
+  #else  
+
+    // Configure no variable spindle and only enable pin.
+    SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT); // Configure as output pin.
+    SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); // Configure as output pin.
+  
+  #endif
+
+  spindle_stop();
+#endif
 }
 
 
 void spindle_stop()
 {
-  // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
+#ifdef CARVIN
   set_pwm(&spindle_motor, 0,SPINDLE_SPINDOWN_RATE);  // fade off spindle
 	
   // LED cross fade
   set_pwm(&spindle_led, 0, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
   set_pwm(&door_led, DOOR_LED_LEVEL_IDLE, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
-  
-  
-  
+#else
+
+  // On the Uno, spindle enable and PWM are shared. Other CPUs have seperate enable pin.
+  #ifdef VARIABLE_SPINDLE
+    TCCRA_REGISTER &= ~(1<<COMB_BIT); // Disable PWM. Output voltage is zero.
+    #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN)
+      #ifdef INVERT_SPINDLE_ENABLE_PIN
+        SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+      #else
+        SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+      #endif
+    #endif
+  #else
+    #ifdef INVERT_SPINDLE_ENABLE_PIN
+      SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);  // Set pin to high
+    #else
+      SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT); // Set pin to low
+    #endif
+  #endif  
+#endif
 }
 
 
 void spindle_set_state(uint8_t state, float rpm)
 {
-	
-	
+  if (sys.abort) { return; } // Block during abort.
+  
   // Halt or set spindle direction and rpm. 
   if (state == SPINDLE_DISABLE) {
 
     spindle_stop();
 
-  } 
-  else 
-  {
-
-   // convert the desired speed to the 8 bit pwm value
-  uint8_t current_pwm;
-  // Calculate PWM register value based on rpm max/min settings and programmed rpm.
-  if (settings.rpm_max <= settings.rpm_min) {
-	// No PWM range possible. Set simple on/off spindle control pin state.
-	current_pwm = PWM_MAX_VALUE;
   } else {
-	if (rpm > settings.rpm_max) { rpm = settings.rpm_max; }
-	if (rpm < settings.rpm_min) { rpm = settings.rpm_min; }
-	#ifdef SPINDLE_MINIMUM_PWM
-	  float pwm_gradient = (PWM_MAX_VALUE-SPINDLE_MINIMUM_PWM)/(settings.rpm_max-settings.rpm_min);
-	  current_pwm = floor( (rpm-settings.rpm_min)*pwm_gradient + (SPINDLE_MINIMUM_PWM+0.5));
-	#else
-	  float pwm_gradient = (PWM_MAX_VALUE)/(settings.rpm_max-settings.rpm_min);
-	  current_pwm = floor( (rpm-settings.rpm_min)*pwm_gradient + 0.5);
-	#endif
-  }  
-  
-	set_pwm(&spindle_motor, current_pwm,SPINDLE_SPINUP_RATE);  // fade on spindle
-	set_pwm(&spindle_led, SPINDLE_LED_LEVEL_RUN,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
-	set_pwm(&door_led, DOOR_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
-     
+
+    #ifndef USE_SPINDLE_DIR_AS_ENABLE_PIN
+      if (state == SPINDLE_ENABLE_CW) {
+        SPINDLE_DIRECTION_PORT &= ~(1<<SPINDLE_DIRECTION_BIT);
+      } else {
+        SPINDLE_DIRECTION_PORT |= (1<<SPINDLE_DIRECTION_BIT);
+      }
+    #endif
+
+    #ifdef VARIABLE_SPINDLE
+
+      // TODO: Install the optional capability for frequency-based output for servos.
+      #ifdef CPU_MAP_ATMEGA2560
+        uint16_t current_pwm; // 2560 PWM register is 16-bit.
+      #else
+        uint8_t current_pwm;  // 328p PWM register is 8-bit.
+      #endif
+
+      // Calculate PWM register value based on rpm max/min settings and programmed rpm.
+      if (settings.rpm_max <= settings.rpm_min) {
+        // No PWM range possible. Set simple on/off spindle control pin state.
+        current_pwm = PWM_MAX_VALUE;
+      } else {
+        if (rpm > settings.rpm_max) { rpm = settings.rpm_max; }
+        if (rpm < settings.rpm_min) { rpm = settings.rpm_min; }
+        #ifdef SPINDLE_MINIMUM_PWM
+          float pwm_gradient = (PWM_MAX_VALUE-SPINDLE_MINIMUM_PWM)/(settings.rpm_max-settings.rpm_min);
+          current_pwm = floor( (rpm-settings.rpm_min)*pwm_gradient + (SPINDLE_MINIMUM_PWM+0.5));
+        #else
+          float pwm_gradient = (PWM_MAX_VALUE)/(settings.rpm_max-settings.rpm_min);
+          current_pwm = floor( (rpm-settings.rpm_min)*pwm_gradient + 0.5);
+        #endif
+      }
+
+	  #ifdef CARVIN
+      
+      set_pwm(&spindle_motor, current_pwm,SPINDLE_SPINUP_RATE);  // fade on spindle
+	  set_pwm(&spindle_led, SPINDLE_LED_LEVEL_RUN,SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
+	  set_pwm(&door_led, DOOR_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
+      
+      #else
+      
+      OCR_REGISTER = current_pwm; // Set PWM output level.
+      TCCRA_REGISTER |= (1<<COMB_BIT); // Ensure PWM output is enabled.
+    
+      // On the Uno, spindle enable and PWM are shared, unless otherwise specified.
+      #if defined(CPU_MAP_ATMEGA2560) || defined(USE_SPINDLE_DIR_AS_ENABLE_PIN) 
+        #ifdef INVERT_SPINDLE_ENABLE_PIN
+          SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+        #else
+          SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
+        #endif
+      #endif
+
+      #endif
+    
+    #else
+       
+      #ifdef INVERT_SPINDLE_ENABLE_PIN
+        SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+      #else
+        SPINDLE_ENABLE_PORT |= (1<<SPINDLE_ENABLE_BIT);
+      #endif
+    
+    #endif
+
   }
 }
+
 
 void spindle_run(uint8_t state, float rpm)
 {
