@@ -141,19 +141,19 @@
   #define CONTROL_DDR       DDRK
   #define CONTROL_PIN       PINK
   #define CONTROL_PORT      PORTK
-  #define RESET_BIT         0  // Not Used
-  #define FEED_HOLD_BIT     1  // Not Used
-  #define CYCLE_START_BIT   2  // Front Button
-  #define SAFETY_DOOR_BIT   1  // Cover Door   Inverted
-  #define CLAMP_CHECK_BIT   4   // clamp check
+  #define CONTROL_RESET_BIT         0  // Not Used
+  #define CONTROL_FEED_HOLD_BIT     1  // Not Used
+  #define CONTROL_CYCLE_START_BIT   2  // Front Button
+  #define CONTROL_SAFETY_DOOR_BIT   1  // Cover Door   Inverted
+  #define CONTROL_CLAMP_CHECK_BIT   4   // clamp check
   #define CONTROL_INT       PCIE2  // Pin change interrupt enable pin
   #define CONTROL_INT_vect  PCINT2_vect
   #define CONTROL_PCMSK     PCMSK2 // Pin change interrupt register
   
   
   // all these switches use pull ups the "normal" is high or inverted    
-  #define CONTROL_MASK      	((1<<CYCLE_START_BIT)|(1<<SAFETY_DOOR_BIT))  // the mask of all switches
-  #define CONTROL_INVERT_MASK 	(1<<CYCLE_START_BIT) // the mask of ones that are inverted.
+  #define CONTROL_MASK      	((1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))  // the mask of all switches
+  #define CONTROL_INVERT_MASK 	(1<<CONTROL_CYCLE_START_BIT) // the mask of ones that are inverted.
   
   //#define CONTROL_INVERT_MASK   CONTROL_MASK // May be re-defined to only invert certain control pins.
   
@@ -168,8 +168,11 @@
     
 	// this is spindle control stuff
 	#define TCCRA_REGISTER		TCCR2A
+    #define SPINDLE_TCCRA_REGISTER    TCCRA_REGISTER
 	#define TCCRB_REGISTER		TCCR2B
+    #define SPINDLE_TCCRB_REGISTER    TCCRB_REGISTER
 	#define SPINDLE_MOTOR_OCR	OCR2B
+    #define SPINDLE_OCR_REGISTER    SPINDLE_TCCRB_REGISTER
 
 	#define COMB_BIT			COM2B1
 	#define WAVE0_REGISTER		WGM20
@@ -177,7 +180,7 @@
 	#define WAVE2_REGISTER		WGM22
 	#define WAVE3_REGISTER		WGM23
 
-	#define PWM_MAX_VALUE 255    // timer2 on a mega2650 is an 8 bit timer
+	#define SPINDLE_PWM_MAX_VALUE     255.0 // Don't change. 328p fast PWM mode fixes top value as 255.
 	#define SPINDLE_PWM_DDR		DDRH
 	#define SPINDLE_PWM_PORT    PORTH
 	#define SPINDLE_PWM_BIT		6
