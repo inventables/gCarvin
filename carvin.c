@@ -264,13 +264,13 @@ void print_switch_states()
 	printPgmString(PSTR("{Sw:"));
 	
 	printPgmString(PSTR("Ctl:"));
-    print_uint8_base2(CONTROL_PIN & CONTROL_MASK);
+    print_uint8_base2_ndigit(CONTROL_PIN & CONTROL_MASK, 8);
 	
 	printPgmString(PSTR(",Lim:"));	
-	print_uint8_base2(LIMIT_PIN & LIMIT_MASK);
+	print_uint8_base2_ndigit(LIMIT_PIN & LIMIT_MASK, 8);
 	
 	printPgmString(PSTR(",Prb:"));	
-	print_uint8_base2(PROBE_PIN & PROBE_MASK);
+	print_uint8_base2_ndigit(PROBE_PIN & PROBE_MASK, 8);
 	
 	printPgmString(PSTR("}\r\n"));
 	
