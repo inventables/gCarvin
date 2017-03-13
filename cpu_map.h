@@ -37,7 +37,7 @@
   #define GEN2_HARDWARE    // The hardware used with the 48V input.  The stepper drivers are SPI controlled
   
 
-  // Serial port pins
+  // Define serial port pins and interrupt vectors.
   #define SERIAL_RX USART0_RX_vect
   #define SERIAL_UDRE USART0_UDRE_vect
 
@@ -45,7 +45,6 @@
   // Define step pulse output pins. NOTE: All step bit pins must be on the same port.
   #define STEP_DDR      DDRA
   #define STEP_PORT     PORTA
-  #define STEP_PIN      PINA
   #define X_STEP_BIT    5
   #define Y_STEP_BIT    6
   #define Z_STEP_BIT    7
@@ -83,34 +82,34 @@
 #endif
 
 #ifdef GEN2_HARDWARE
-	#define DOOR_LED_DDR     DDRH  // name the direction register
-	#define DOOR_LED_PORT    PORTH // name the port register
-	#define DOOR_LED_BIT     4   // what bit on the port is it?
-	#define DOOR_LED_OCR     OCR4B // the value of the duty cycle
-	#define DOOR_LED_MAX     1023
+  #define DOOR_LED_DDR     DDRH  // name the direction register
+  #define DOOR_LED_PORT    PORTH // name the port register
+  #define DOOR_LED_BIT     4   // what bit on the port is it?
+  #define DOOR_LED_OCR     OCR4B // the value of the duty cycle
+  #define DOOR_LED_MAX     1023
 #endif
-	
+  
 #ifdef GEN1_HARDWARE	// GEN1 uses an analog voltage for stepper current
-	#define STEPPER_VREF_DDR     DDRE
+  #define STEPPER_VREF_DDR     DDRE
     #define STEPPER_VREF_PORT    PORTE
     #define STEPPER_VREF_BIT     3   // E3 is Timer 3
-	#define STEPPER_VREF_OCR     OCR3A
-	#define I_SENSE_RESISTOR     0.27
-	#define STEPPER_RUN_CURRENT  2.2
-	#define STEPPER_HOMING_CURRENT  0.75
+  #define STEPPER_VREF_OCR     OCR3A
+  #define I_SENSE_RESISTOR     0.27
+  #define STEPPER_RUN_CURRENT  2.2
+  #define STEPPER_HOMING_CURRENT  0.75
 #endif
 
-	
+  
     #define SPINDLE_LED_DDR     DDRH
     #define SPINDLE_LED_PORT    PORTH
     #define SPINDLE_LED_BIT     5     // H5 is Timer 4
-	#define SPINDLE_LED_OCR     OCR4C
-	
-	//  ========================  End of PWM Ports ======================= 
-	
+  #define SPINDLE_LED_OCR     OCR4C
+  
+  //  ========================  End of PWM Ports ======================= 
+  
 
-	
-  // NOTE: All limit bit pins must be on the same port
+  
+  // NOTE: All limit bit pins must be on the same port, but not on a port with other input pins (CONTROL).
   #define LIMIT_DDR       DDRB
   #define LIMIT_PORT      PORTB
   #define LIMIT_PIN       PINB
@@ -132,12 +131,14 @@
   
   
    
+  // Define flood and mist coolant enable output pins.
   // These are not actually used
   #define COOLANT_FLOOD_DDR   DDRG
   #define COOLANT_FLOOD_PORT  PORTG
   #define COOLANT_FLOOD_BIT   5
   
-	// control i/o
+  // Define user-control controls (cycle start, reset, feed hold) input pins.
+  // NOTE: All CONTROLs pins must be on the same port and not on a port with other input pins (limits).
   #define CONTROL_DDR       DDRK
   #define CONTROL_PIN       PINK
   #define CONTROL_PORT      PORTK
@@ -152,12 +153,9 @@
   
   
   // all these switches use pull ups the "normal" is high or inverted    
-  #define CONTROL_MASK      	((1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))  // the mask of all switches
+  #define CONTROL_MASK      ((1<<CONTROL_RESET_BIT)|(1<<CONTROL_FEED_HOLD_BIT)|(1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))
   #define CONTROL_INVERT_MASK 	(1<<CONTROL_CYCLE_START_BIT) // the mask of ones that are inverted.
   
-  //#define CONTROL_INVERT_MASK   CONTROL_MASK // May be re-defined to only invert certain control pins.
-  
-	
   // Define probe switch input pin.  (Probe is smart clamp in gCarvin)
   #define PROBE_DDR       DDRK
   #define PROBE_PIN       PINK
@@ -165,39 +163,39 @@
   #define PROBE_BIT       3    // smart clamp
   #define PROBE_MASK      (1<<PROBE_BIT)
 
-    
-	// this is spindle control stuff
-	#define TCCRA_REGISTER		TCCR2A
+  // this is spindle control stuff
+  #define TCCRA_REGISTER		TCCR2A
     #define SPINDLE_TCCRA_REGISTER    TCCRA_REGISTER
-	#define TCCRB_REGISTER		TCCR2B
+  #define TCCRB_REGISTER		TCCR2B
     #define SPINDLE_TCCRB_REGISTER    TCCRB_REGISTER
-	#define SPINDLE_MOTOR_OCR	OCR2B
+  #define SPINDLE_MOTOR_OCR	OCR2B
     #define SPINDLE_OCR_REGISTER    SPINDLE_TCCRB_REGISTER
 
-	#define COMB_BIT			COM2B1
-	#define WAVE0_REGISTER		WGM20
-	#define WAVE1_REGISTER		WGM21
-	#define WAVE2_REGISTER		WGM22
-	#define WAVE3_REGISTER		WGM23
+  #define COMB_BIT			COM2B1
+  #define WAVE0_REGISTER		WGM20
+  #define WAVE1_REGISTER		WGM21
+  #define WAVE2_REGISTER		WGM22
+  #define WAVE3_REGISTER		WGM23
 
-	#define SPINDLE_PWM_MAX_VALUE     255.0 // Don't change. 328p fast PWM mode fixes top value as 255.
-	#define SPINDLE_PWM_DDR		DDRH
-	#define SPINDLE_PWM_PORT    PORTH
-	#define SPINDLE_PWM_BIT		6
-	
-	// spindle need a soft start to prevent drawing too much current
-	#define SPINDLE_SPINUP_RATE 2  // seconds
-	#define SPINDLE_SPINDOWN_RATE 3  // seconds
+  #define SPINDLE_PWM_MAX_VALUE     255.0 // Don't change. 328p fast PWM mode fixes top value as 255.
+  #define SPINDLE_PWM_OFF_VALUE     0
+  #define SPINDLE_PWM_DDR		DDRH
+  #define SPINDLE_PWM_PORT    PORTH
+  #define SPINDLE_PWM_BIT		6
+  
+  // spindle need a soft start to prevent drawing too much current
+  #define SPINDLE_SPINUP_RATE 2  // seconds
+  #define SPINDLE_SPINDOWN_RATE 3  // seconds
     #define EXTEND_SPINDLE_LED_FADE 2 // seconds - it looks a little better if the cross fade associated with the spindle lasts a little longer
 
 #endif
 
-	#define DEFAULT_G28_X  -282.5
-	#define DEFAULT_G28_Y  -199.5
-	#define DEFAULT_G28_Z  -1.0
-	
-	#define DEFAULT_G30_X  -150.0
-	#define DEFAULT_G30_Y  -10.0
-	#define DEFAULT_G30_Z  -1.0
+  #define DEFAULT_G28_X  -282.5
+  #define DEFAULT_G28_Y  -199.5
+  #define DEFAULT_G28_Z  -1.0
+  
+  #define DEFAULT_G30_X  -150.0
+  #define DEFAULT_G30_Y  -10.0
+  #define DEFAULT_G30_Z  -1.0
 
 #endif
