@@ -235,17 +235,34 @@ uint8_t system_execute_line(char *line)
           else { report_ngc_parameters(); }
           break;
         case 'H' : // Perform homing cycle [IDLE/ALARM]
-          if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
-            // Block if safety door is ajar.
-            if (system_check_safety_door_ajar()) { return(STATUS_CHECK_DOOR); }
-            sys.state = STATE_HOMING; // Set system state variable
-            mc_homing_cycle();
-            if (!sys.abort) {  // Execute startup scripts after successful homing.
-              sys.state = STATE_IDLE; // Set to IDLE when complete.
-              st_go_idle(); // Set steppers to the settings idle state before returning.
-              system_execute_startup(line);
-            }
-          } else { return(STATUS_SETTING_DISABLED); }
+          if (bit_isfalse(settings.flags,BITFLAG_HOMING_ENABLE)) {return(STATUS_SETTING_DISABLED); }
+          if (system_check_safety_door_ajar()) { return(STATUS_CHECK_DOOR); } // Block if safety door is ajar.
+          sys.state = STATE_HOMING; // Set system state variable
+          if (line[2] == 0) {
+            mc_homing_cycle(HOMING_CYCLE_ALL);
+          #ifdef HOMING_SINGLE_AXIS_COMMANDS
+            } else if (line[3] == 0) {
+              switch (line[2]) {
+                case 'X': mc_homing_cycle(HOMING_CYCLE_X); break;
+                case 'Y': mc_homing_cycle(HOMING_CYCLE_Y); break;
+                case 'Z': mc_homing_cycle(HOMING_CYCLE_Z); break;
+                default: return(STATUS_INVALID_STATEMENT);
+              }
+          #endif
+          } else { return(STATUS_INVALID_STATEMENT); }
+          if (!sys.abort) {  // Execute startup scripts after successful homing.
+            sys.state = STATE_IDLE; // Set to IDLE when complete.
+            st_go_idle(); // Set steppers to the settings idle state before returning.
+            if (line[2] == 0) { system_execute_startup(line); }
+          }
+          break;
+        case 'S' : // Puts Grbl to sleep [IDLE/ALARM]
+          #ifdef CARVIN
+          if (line[2] == 0) { print_switch_states(); }
+          else 
+          #endif
+          if ((line[2] != 'L') || (line[3] != 'P') || (line[4] != 0)) {  return(STATUS_INVALID_STATEMENT); }
+          system_set_exec_state_flag(EXEC_SLEEP); // Set to execute sleep mode immediately
           break;
         case 'I' : // Print or store build info. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) {
@@ -281,9 +298,6 @@ uint8_t system_execute_line(char *line)
 				set_pwm(&door_led, 0,4);
 				set_pwm(&spindle_led, 0,4);
 			}
-		break;
-		case 'S':
-			print_switch_states();
 		break;
 		#endif
         case 'R' : // Restore defaults [IDLE/ALARM]
@@ -351,7 +365,7 @@ void system_flag_wco_change()
   #ifdef FORCE_BUFFER_SYNC_DURING_WCO_CHANGE
     protocol_buffer_synchronize();
   #endif
-  sys.report_wco_counter = REPORT_WCO_REFRESH_BUSY_COUNT;
+  sys.report_wco_counter = 0;
 }
 
 
@@ -443,10 +457,10 @@ void system_set_exec_alarm(uint8_t code) {
   SREG = sreg;
 }
 
-void system_clear_exec_alarm_flag(uint8_t mask) {
+void system_clear_exec_alarm() {
   uint8_t sreg = SREG;
   cli();
-  sys_rt_exec_alarm &= ~(mask);
+  sys_rt_exec_alarm = 0;
   SREG = sreg;
 }
 

@@ -26,7 +26,6 @@
 
 #ifndef defaults_h
 
-
 #ifdef DEFAULTS_CARVIN
   // Grbl generic default settings. Should work across different machines.
   #define DEFAULT_X_STEPS_PER_MM 88.889

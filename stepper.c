@@ -58,12 +58,12 @@
 // discarded when entirely consumed and completed by the segment buffer. Also, AMASS alters this
 // data for its own use.
 typedef struct {
-  uint8_t direction_bits;
-  #ifdef VARIABLE_SPINDLE
-    uint8_t spindle_pwm;
-  #endif
   uint32_t steps[N_AXIS];
   uint32_t step_event_count;
+  uint8_t direction_bits;
+  #ifdef VARIABLE_SPINDLE
+    uint8_t is_pwm_rate_adjusted; // Tracks motions that require constant laser power/rate
+  #endif
 } st_block_t;
 static st_block_t st_block_buffer[SEGMENT_BUFFER_SIZE-1];
 
@@ -72,13 +72,16 @@ static st_block_t st_block_buffer[SEGMENT_BUFFER_SIZE-1];
 // planner buffer. Once "checked-out", the steps in the segments buffer cannot be modified by
 // the planner, where the remaining planner block steps still can.
 typedef struct {
-  uint16_t n_step;          // Number of step events to be executed for this segment
-  uint8_t st_block_index;   // Stepper block data index. Uses this information to execute this segment.
-  uint16_t cycles_per_tick; // Step distance traveled per ISR tick, aka step rate.
+  uint16_t n_step;           // Number of step events to be executed for this segment
+  uint16_t cycles_per_tick;  // Step distance traveled per ISR tick, aka step rate.
+  uint8_t  st_block_index;   // Stepper block data index. Uses this information to execute this segment.
   #ifdef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
     uint8_t amass_level;    // Indicates AMASS level for the ISR to execute this segment
   #else
     uint8_t prescaler;      // Without AMASS, a prescaler is required to adjust for slow timing.
+  #endif
+  #ifdef VARIABLE_SPINDLE
+    uint8_t spindle_pwm;
   #endif
 } segment_t;
 static segment_t segment_buffer[SEGMENT_BUFFER_SIZE];
@@ -151,6 +154,11 @@ typedef struct {
   float exit_speed;       // Exit speed of executing block (mm/min)
   float accelerate_until; // Acceleration ramp end measured from end of block (mm)
   float decelerate_after; // Deceleration ramp start measured from end of block (mm)
+
+  #ifdef VARIABLE_SPINDLE
+    float inv_rate;    // Used by PWM laser mode to speed up segment calculations.
+    uint8_t current_spindle_pwm; 
+  #endif
 } st_prep_t;
 static st_prep_t prep;
 
@@ -210,8 +218,7 @@ void st_wake_up()
   else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
 #endif	
   
-  // Initialize stepper output bits
-  st.dir_outbits = dir_port_invert_mask;
+  // Initialize stepper output bits to ensure first ISR call does not step.
   st.step_outbits = step_port_invert_mask;
 
   // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
@@ -240,7 +247,7 @@ void st_go_idle()
 
   // Set stepper driver idle state, disabled or enabled, depending on settings and circumstances.
   bool pin_state = false; // Keep enabled.
-  if (((settings.stepper_idle_lock_time != 0xff) || sys_rt_exec_alarm) && sys.state != STATE_HOMING) {
+  if (((settings.stepper_idle_lock_time != 0xff) || sys_rt_exec_alarm || sys.state == STATE_SLEEP) && sys.state != STATE_HOMING) {
     // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
     // stop and not drift from residual inertial forces at the end of the last movement.
     delay_ms(settings.stepper_idle_lock_time);
@@ -323,7 +330,6 @@ void st_go_idle()
 // with probing and homing cycles that require true real-time positions.
 ISR(TIMER1_COMPA_vect)
 {
-// SPINDLE_ENABLE_PORT ^= 1<<SPINDLE_ENABLE_BIT; // Debug: Used to time ISR
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
 
   // Set the direction pins a couple of nanoseconds before we step the steppers
@@ -380,12 +386,16 @@ ISR(TIMER1_COMPA_vect)
 
       #ifdef VARIABLE_SPINDLE
         // Set real-time spindle output as segment is loaded, just prior to the first step.
-        spindle_set_speed(st.exec_block->spindle_pwm);
+        spindle_set_speed(st.exec_segment->spindle_pwm);
       #endif
 
     } else {
       // Segment buffer empty. Shutdown.
       st_go_idle();
+      #ifdef VARIABLE_SPINDLE
+        // Ensure pwm is set properly upon completion of rate-controlled motion.
+        if (st.exec_block->is_pwm_rate_adjusted) { spindle_set_speed(SPINDLE_PWM_OFF_VALUE); }
+      #endif
       system_set_exec_state_flag(EXEC_CYCLE_STOP); // Flag main program for cycle end
       return; // Nothing to do but exit.
     }
@@ -445,7 +455,6 @@ ISR(TIMER1_COMPA_vect)
 
   st.step_outbits ^= step_port_invert_mask;  // Apply step port invert mask
   busy = false;
-// SPINDLE_ENABLE_PORT ^= 1<<SPINDLE_ENABLE_BIT; // Debug: Used to time ISR
 }
 
 
@@ -509,6 +518,7 @@ void st_reset()
   busy = false;
 
   st_generate_step_dir_invert_masks();
+  st.dir_outbits = dir_port_invert_mask; // Initialize direction bits to default.
 
   // Initialize step and direction port pins.
   STEP_PORT = (STEP_PORT & ~STEP_MASK) | step_port_invert_mask;
@@ -675,6 +685,19 @@ void st_prep_buffer()
         } else {
           prep.current_speed = sqrt(pl_block->entry_speed_sqr);
         }
+        
+        #ifdef VARIABLE_SPINDLE
+          // Setup laser mode variables. PWM rate adjusted motions will always complete a motion with the
+          // spindle off. 
+          st_prep_block->is_pwm_rate_adjusted = false;
+          if (settings.flags & BITFLAG_LASER_MODE) {
+            if (pl_block->condition & PL_COND_FLAG_SPINDLE_CCW) { 
+              // Pre-compute inverse programmed rate to speed up PWM updating per step segment.
+              prep.inv_rate = 1.0/pl_block->programmed_rate;
+              st_prep_block->is_pwm_rate_adjusted = true; 
+            }
+          }
+        #endif
       }
 
 			/* ---------------------------------------------------------------------------------
@@ -767,13 +790,12 @@ void st_prep_buffer()
 					prep.maximum_speed = prep.exit_speed;
 				}
 			}
-
-			#ifdef VARIABLE_SPINDLE
-        st_prep_block->spindle_pwm = spindle_compute_pwm_value((0.01*sys.spindle_speed_ovr)*pl_block->spindle_speed);
+      
+      #ifdef VARIABLE_SPINDLE
+        bit_true(sys.step_control, STEP_CONTROL_UPDATE_SPINDLE_PWM); // Force update whenever updating block.
       #endif
-
     }
-
+    
     // Initialize new segment
     segment_t *prep_segment = &segment_buffer[segment_buffer_head];
 
@@ -879,7 +901,29 @@ void st_prep_buffer()
       }
     } while (mm_remaining > prep.mm_complete); // **Complete** Exit loop. Profile complete.
 
+    #ifdef VARIABLE_SPINDLE
+      /* -----------------------------------------------------------------------------------
+        Compute spindle speed PWM output for step segment
+      */
+      
+      if (st_prep_block->is_pwm_rate_adjusted || (sys.step_control & STEP_CONTROL_UPDATE_SPINDLE_PWM)) {
+        if (pl_block->condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)) {
+          float rpm = pl_block->spindle_speed;
+          // NOTE: Feed and rapid overrides are independent of PWM value and do not alter laser power/rate.        
+          if (st_prep_block->is_pwm_rate_adjusted) { rpm *= (prep.current_speed * prep.inv_rate); }
+          // If current_speed is zero, then may need to be rpm_min*(100/MAX_SPINDLE_SPEED_OVERRIDE)
+          // but this would be instantaneous only and during a motion. May not matter at all.
+          prep.current_spindle_pwm = spindle_compute_pwm_value(rpm);
+        } else { 
+          sys.spindle_speed = 0.0;
+          prep.current_spindle_pwm = SPINDLE_PWM_OFF_VALUE;
+        }
+        bit_false(sys.step_control,STEP_CONTROL_UPDATE_SPINDLE_PWM);
+      }
+      prep_segment->spindle_pwm = prep.current_spindle_pwm; // Reload segment PWM value
 
+    #endif
+    
     /* -----------------------------------------------------------------------------------
        Compute segment step rate, steps to execute, and apply necessary rate corrections.
        NOTE: Steps are computed by direct scalar conversion of the millimeter distance
@@ -995,8 +1039,8 @@ void st_prep_buffer()
 // divided by the ACCELERATION TICKS PER SECOND in seconds.
 float st_get_realtime_rate()
 {
-   if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_HOLD | STATE_JOG | STATE_SAFETY_DOOR)){
-     return prep.current_speed;
-   }
+  if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_HOLD | STATE_JOG | STATE_SAFETY_DOOR)){
+    return prep.current_speed;
+  }
   return 0.0f;
 }

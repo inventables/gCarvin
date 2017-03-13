@@ -36,6 +36,7 @@
 #define EXEC_RESET          bit(4) // bitmask 00010000
 #define EXEC_SAFETY_DOOR    bit(5) // bitmask 00100000
 #define EXEC_MOTION_CANCEL  bit(6) // bitmask 01000000
+#define EXEC_SLEEP          bit(7) // bitmask 10000000
 
 // Alarm executor codes. Valid values (1-255). Zero is reserved.
 #define EXEC_ALARM_HARD_LIMIT           1
@@ -80,7 +81,7 @@
 #define STATE_HOLD          bit(4) // Active feed hold
 #define STATE_JOG           bit(5) // Jogging mode.
 #define STATE_SAFETY_DOOR   bit(6) // Safety door is ajar. Feed holds and de-energizes system.
-// #define STATE_SLEEP         bit(7) // Sleep state. [Grbl-Mega Only]
+#define STATE_SLEEP         bit(7) // Sleep state. [Grbl-Mega Only]
 
 // Define system suspend flags. Used in various ways to manage suspend states and procedures.
 #define SUSPEND_DISABLE           0      // Must be zero.
@@ -94,10 +95,11 @@
 #define SUSPEND_JOG_CANCEL        bit(7) // Indicates a jog cancel in process and to reset buffers when complete.
 
 // Define step segment generator state flags.
-#define STEP_CONTROL_NORMAL_OP            0
+#define STEP_CONTROL_NORMAL_OP            0  // Must be zero.
 #define STEP_CONTROL_END_MOTION           bit(0)
 #define STEP_CONTROL_EXECUTE_HOLD         bit(1)
 #define STEP_CONTROL_EXECUTE_SYS_MOTION   bit(2)
+#define STEP_CONTROL_UPDATE_SPINDLE_PWM   bit(3)
 
 // Define control pin index for Grbl internal use. Pin maps may change, but these values don't.
 #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
@@ -113,21 +115,18 @@
   #define CONTROL_PIN_INDEX_CYCLE_START   bit(2)
 #endif
 
-// Define toggle override control states.
-#define TOGGLE_OVR_STOP_ENABLED        bit(0)
-#define TOGGLE_OVR_STOP_INITIATE       bit(1)
-#define TOGGLE_OVR_STOP_RESTORE        bit(2)
-#define TOGGLE_OVR_STOP_RESTORE_CYCLE  bit(3)
-#define TOGGLE_OVR_FLOOD_COOLANT       bit(4)
-#define TOGGLE_OVR_MIST_COOLANT        bit(5)
-#define TOGGLE_OVR_STOP_ACTIVE_MASK  (TOGGLE_OVR_STOP_ENABLED|TOGGLE_OVR_STOP_INITIATE|TOGGLE_OVR_STOP_RESTORE|TOGGLE_OVR_STOP_RESTORE_CYCLE)
-// NOTE: Mask is used to determine if spindle stop is active or disabled.
+// Define spindle stop override control states.
+#define SPINDLE_STOP_OVR_DISABLED       0  // Must be zero.
+#define SPINDLE_STOP_OVR_ENABLED        bit(0)
+#define SPINDLE_STOP_OVR_INITIATE       bit(1)
+#define SPINDLE_STOP_OVR_RESTORE        bit(2)
+#define SPINDLE_STOP_OVR_RESTORE_CYCLE  bit(3)
 
 
 // Define global system variables
 typedef struct {
-  uint8_t abort;               // System abort flag. Forces exit back to main loop for reset.
   uint8_t state;               // Tracks the current system state of Grbl.
+  uint8_t abort;               // System abort flag. Forces exit back to main loop for reset.             
   uint8_t suspend;             // System suspend bitflag variable that manages holds, cancels, and safety door.
   uint8_t soft_limit;          // Tracks soft limit errors for the state machine. (boolean)
   uint8_t step_control;        // Governs the step segment generator depending on system state.
@@ -136,9 +135,12 @@ typedef struct {
   uint8_t f_override;          // Feed rate override value in percent
   uint8_t r_override;          // Rapids override value in percent
   uint8_t spindle_speed_ovr;   // Spindle speed value in percent
-  uint8_t toggle_ovr_mask;          // Tracks toggle override states
+  uint8_t spindle_stop_ovr;    // Tracks spindle stop override states
   uint8_t report_ovr_counter;  // Tracks when to add override data to status reports.
   uint8_t report_wco_counter;  // Tracks when to add work coordinate offset data to status reports.
+  #ifdef VARIABLE_SPINDLE
+    float spindle_speed;
+  #endif
 } system_t;
 extern system_t sys;
 
@@ -146,7 +148,7 @@ extern system_t sys;
 int32_t sys_position[N_AXIS];      // Real-time machine (aka home) position vector in steps.
 int32_t sys_probe_position[N_AXIS]; // Last probe position in machine coordinates and steps.
 
-volatile uint8_t sys_probe_state;  // Probing state value.  Used to coordinate the probing cycle with stepper ISR.
+volatile uint8_t sys_probe_state;   // Probing state value.  Used to coordinate the probing cycle with stepper ISR.
 volatile uint8_t sys_rt_exec_state;   // Global realtime executor bitflag variable for state management. See EXEC bitmasks.
 volatile uint8_t sys_rt_exec_alarm;   // Global realtime executor bitflag variable for setting various alarms.
 volatile uint8_t sys_rt_exec_motion_override; // Global realtime executor bitflag variable for motion-based overrides.
@@ -199,7 +201,7 @@ uint8_t system_check_travel_limits(float *target);
 void system_set_exec_state_flag(uint8_t mask);
 void system_clear_exec_state_flag(uint8_t mask);
 void system_set_exec_alarm(uint8_t code);
-void system_clear_exec_alarm_flag(uint8_t mask);
+void system_clear_exec_alarm();
 void system_set_exec_motion_override_flag(uint8_t mask);
 void system_set_exec_accessory_override_flag(uint8_t mask);
 void system_clear_exec_motion_overrides();

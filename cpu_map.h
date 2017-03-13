@@ -172,12 +172,16 @@
     #define SPINDLE_OCR_REGISTER    SPINDLE_TCCRB_REGISTER
 
   #define COMB_BIT			COM2B1
+    #define SPINDLE_COMB_BIT    COMB_BIT
   #define WAVE0_REGISTER		WGM20
   #define WAVE1_REGISTER		WGM21
   #define WAVE2_REGISTER		WGM22
   #define WAVE3_REGISTER		WGM23
 
-  #define SPINDLE_PWM_MAX_VALUE     255.0 // Don't change. 328p fast PWM mode fixes top value as 255.
+  #define SPINDLE_PWM_MAX_VALUE     255 // Don't change. 328p fast PWM mode fixes top value as 255.
+  #ifndef SPINDLE_PWM_MIN_VALUE
+    #define SPINDLE_PWM_MIN_VALUE     1   // Must be greater than zero.
+  #endif
   #define SPINDLE_PWM_OFF_VALUE     0
   #define SPINDLE_PWM_DDR		DDRH
   #define SPINDLE_PWM_PORT    PORTH

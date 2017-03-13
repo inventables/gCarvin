@@ -106,8 +106,11 @@ void mc_arc(float *target, plan_line_data_t *pl_data, float *position, float *of
     // Multiply inverse feed_rate to compensate for the fact that this movement is approximated
     // by a number of discrete segments. The inverse feed_rate should be correct for the sum of
     // all segments.
-    if (pl_data->condition & PL_COND_FLAG_INVERSE_TIME) { pl_data->feed_rate *= segments; }
-
+    if (pl_data->condition & PL_COND_FLAG_INVERSE_TIME) { 
+      pl_data->feed_rate *= segments; 
+      bit_false(pl_data->condition,PL_COND_FLAG_INVERSE_TIME); // Force as feed absolute mode over arc segments.
+    }
+    
     float theta_per_segment = angular_travel/segments;
     float linear_per_segment = (target[axis_linear] - position[axis_linear])/segments;
 
@@ -193,7 +196,7 @@ void mc_dwell(float seconds)
 // Perform homing cycle to locate and set machine zero. Only '$H' executes this command.
 // NOTE: There should be no motions in the buffer and Grbl must be in an idle state before
 // executing the homing cycle. This prevents incorrect buffered plans after homing.
-void mc_homing_cycle()
+void mc_homing_cycle(uint8_t cycle_mask)
 {
   // Check and abort homing cycle, if hard limits are already enabled. Helps prevent problems
   // with machines with limits wired on both ends of travel to one limit pin.
@@ -210,15 +213,21 @@ void mc_homing_cycle()
 
   // -------------------------------------------------------------------------------------
   // Perform homing routine. NOTE: Special motion case. Only system reset works.
-
-  // Search to engage all axes limit switches at faster homing seek rate.
-  limits_go_home(HOMING_CYCLE_0);  // Homing cycle 0
-  #ifdef HOMING_CYCLE_1
-    limits_go_home(HOMING_CYCLE_1);  // Homing cycle 1
+  
+  #ifdef HOMING_SINGLE_AXIS_COMMANDS
+    if (cycle_mask) { limits_go_home(cycle_mask); } // Perform homing cycle based on mask.
+    else
   #endif
-  #ifdef HOMING_CYCLE_2
-    limits_go_home(HOMING_CYCLE_2);  // Homing cycle 2
-  #endif
+  {
+    // Search to engage all axes limit switches at faster homing seek rate.
+    limits_go_home(HOMING_CYCLE_0);  // Homing cycle 0
+    #ifdef HOMING_CYCLE_1
+      limits_go_home(HOMING_CYCLE_1);  // Homing cycle 1
+    #endif
+    #ifdef HOMING_CYCLE_2
+      limits_go_home(HOMING_CYCLE_2);  // Homing cycle 2
+    #endif
+  }
 
   protocol_execute_realtime(); // Check for reset and set system abort.
   if (sys.abort) { return; } // Did not complete. Alarm state set by mc_alarm.
@@ -237,7 +246,7 @@ void mc_homing_cycle()
 
 // Perform tool length probe cycle. Requires probe switch.
 // NOTE: Upon probe failure, the program will be stopped and placed into ALARM state.
-uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t is_probe_away, uint8_t is_no_error)
+uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t parser_flags)
 {
   // TODO: Need to update this cycle so it obeys a non-auto cycle start.
   if (sys.state == STATE_CHECK_MODE) { return(GC_PROBE_CHECK_MODE); }
@@ -247,6 +256,8 @@ uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t is_prob
   if (sys.abort) { return(GC_PROBE_ABORT); } // Return if system reset has been issued.
 
   // Initialize probing control variables
+  uint8_t is_probe_away = bit_istrue(parser_flags,GC_PARSER_PROBE_IS_AWAY);
+  uint8_t is_no_error = bit_istrue(parser_flags,GC_PARSER_PROBE_IS_NO_ERROR);
   sys.probe_succeeded = false; // Re-initialize probe history before beginning cycle.
   probe_configure_invert_mask(is_probe_away);
 
@@ -289,16 +300,6 @@ uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t is_prob
   st_reset(); // Reset step segment buffer.
   plan_reset(); // Reset planner buffer. Zero planner positions. Ensure probing motion is cleared.
   plan_sync_position(); // Sync planner position to current machine position.
-
-  // TODO: Update the g-code parser code to not require this target calculation but uses a gc_sync_position() call.
-  // NOTE: The target[] variable updated here will be sent back and synced with the g-code parser.
-  
-  //!!! This is the problem. Need to set the g-code parser to update the position appropriately.
-  // - Probe initialization fail: Retain current position.
-  // - Probe successful: Update new positions across everything, since held before the target.
-  // - Probe did not contact (alarm or not): Copy original target position as normal
-   
-//   system_convert_array_steps_to_mpos(target, sys_position);
 
   #ifdef MESSAGE_PROBE_COORDINATES
     // All done! Output the probe position as message.
@@ -350,7 +351,7 @@ void mc_reset()
 
     // Kill spindle and coolant.
     spindle_stop();
-    coolant_set_state(COOLANT_DISABLE);
+    coolant_stop();
 
     // Kill steppers only if in any motion state, i.e. cycle, actively holding, or homing.
     // NOTE: If steppers are kept enabled via the step idle delay setting, this also keeps
@@ -358,8 +359,9 @@ void mc_reset()
     // violated, by which, all bets are off.
     if ((sys.state & (STATE_CYCLE | STATE_HOMING | STATE_JOG)) ||
     		(sys.step_control & (STEP_CONTROL_EXECUTE_HOLD | STEP_CONTROL_EXECUTE_SYS_MOTION))) {
-      if (sys.state == STATE_HOMING) { system_set_exec_alarm(EXEC_ALARM_HOMING_FAIL_RESET); }
-      else { system_set_exec_alarm(EXEC_ALARM_ABORT_CYCLE); }
+      if (sys.state == STATE_HOMING) { 
+        if (!sys_rt_exec_alarm) {system_set_exec_alarm(EXEC_ALARM_HOMING_FAIL_RESET); }
+      } else { system_set_exec_alarm(EXEC_ALARM_ABORT_CYCLE); }
       st_go_idle(); // Force kill steppers. Position has likely been lost.
     }
   }

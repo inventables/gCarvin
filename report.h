@@ -57,6 +57,7 @@
 #define STATUS_GCODE_NO_OFFSETS_IN_PLANE 35
 #define STATUS_GCODE_UNUSED_WORDS 36
 #define STATUS_GCODE_G43_DYNAMIC_AXIS_ERROR 37
+#define STATUS_GCODE_MAX_VALUE_EXCEEDED 38
 
 // Define Grbl alarm codes. Valid values (1-255). 0 is reserved.
 #define ALARM_HARD_LIMIT_ERROR      EXEC_ALARM_HARD_LIMIT
@@ -80,12 +81,13 @@
 #define MESSAGE_PROGRAM_END 8
 #define MESSAGE_RESTORE_DEFAULTS 9
 #define MESSAGE_SPINDLE_RESTORE 10
+#define MESSAGE_SLEEP_MODE 11
 
 // Prints system status messages.
 void report_status_message(uint8_t status_code);
 
 // Prints system alarm messages.
-void report_alarm_message(int8_t alarm_code);
+void report_alarm_message(uint8_t alarm_code);
 
 // Prints miscellaneous feedback messages.
 void report_feedback_message(uint8_t message_code);
