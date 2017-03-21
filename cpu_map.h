@@ -154,7 +154,7 @@
   
   // all these switches use pull ups the "normal" is high or inverted    
   #define CONTROL_MASK      ((1<<CONTROL_RESET_BIT)|(1<<CONTROL_FEED_HOLD_BIT)|(1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))
-  #define CONTROL_INVERT_MASK 	(1<<CONTROL_CYCLE_START_BIT) // the mask of ones that are inverted.
+  #define CONTROL_INVERT_MASK 	CONTROL_MASK // the mask of ones that are inverted.
   
   // Define probe switch input pin.  (Probe is smart clamp in gCarvin)
   #define PROBE_DDR       DDRK

@@ -45,6 +45,7 @@ uint8_t system_control_get_state()
   #ifdef INVERT_CONTROL_PIN_MASK
     pin ^= INVERT_CONTROL_PIN_MASK;
   #endif
+
   if (pin) {
     #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
       if (bit_isfalse(pin,(1<<CONTROL_SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
@@ -53,6 +54,7 @@ uint8_t system_control_get_state()
     if (bit_isfalse(pin,(1<<CONTROL_FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
     if (bit_isfalse(pin,(1<<CONTROL_CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
   }
+
   return(control_state);
 }
 
@@ -94,19 +96,14 @@ ISR(CONTROL_INT_vect)
 #ifdef CARVIN
 void checkControlPins()
 {
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  
-  // if some are inverted logic pins they need flipped
-  #ifdef CONTROL_INVERT_MASK
-    pin ^= CONTROL_INVERT_MASK;
-  #endif
+  uint8_t pin = system_control_get_state();
   
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
-    if (bit_istrue(pin,bit(CONTROL_RESET_BIT))) {
+    if (bit_istrue(pin,CONTROL_PIN_INDEX_RESET)) {
       mc_reset();
     }
-    else if (bit_istrue(pin,bit(CONTROL_CYCLE_START_BIT))) //the front button
+    else if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) //the front button
     {	
       if (sys.state != STATE_IDLE)  // button only does something when not in idle
       {
@@ -128,11 +125,11 @@ void checkControlPins()
       }
  
     #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
-    } else if (bit_istrue(pin,bit(CONTROL_FEED_HOLD_BIT))) {
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
         bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
     }
     #else
-    } else if (bit_istrue(pin,bit(CONTROL_SAFETY_DOOR_BIT))) {
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
         bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
     }
     #endif 
@@ -261,8 +258,14 @@ uint8_t system_execute_line(char *line)
           if (line[2] == 0) { print_switch_states(); }
           else 
           #endif
-          if ((line[2] != 'L') || (line[3] != 'P') || (line[4] != 0)) {  return(STATUS_INVALID_STATEMENT); }
-          system_set_exec_state_flag(EXEC_SLEEP); // Set to execute sleep mode immediately
+          if ((line[2] == 'L') || (line[3] == 'P') || (line[4] == 0)) 
+          {   
+            system_set_exec_state_flag(EXEC_SLEEP); // Set to execute sleep mode immediately
+          }
+          else
+          {
+            return(STATUS_INVALID_STATEMENT);
+          }
           break;
         case 'I' : // Print or store build info. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) {
