@@ -23,7 +23,7 @@
 
 // Grbl versioning system
 #define GRBL_VERSION "2.0.0-alpha"
-#define GRBL_VERSION_BUILD "20170327"
+#define GRBL_VERSION_BUILD "20170328"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
@@ -38,6 +38,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define CARVIN
+
 // Define the Grbl system include files. NOTE: Do not alter organization.
 #include "config.h"
 #include "nuts_bolts.h"
@@ -49,6 +51,7 @@
 #ifdef CARVIN
 	#include "carvin.h"
 	#include "TMC26x.h"
+    #include "sleep.h"
 #endif
 #include "coolant_control.h"
 #include "eeprom.h"

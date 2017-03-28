@@ -267,7 +267,6 @@ uint8_t system_execute_line(char *line)
           break;
 		#ifdef CARVIN
 		case 'K':
-          //tmc26x_init();  // just for testing
           reset_cpu();  // hard reset
 		break;
 		case 'L':
@@ -284,6 +283,12 @@ uint8_t system_execute_line(char *line)
             set_pwm(&door_led, 0,DOOR_LED_RISE_TIME);
             set_pwm(&spindle_led, 0,SPINDLE_LED_RISE_TIME);
           }
+        break;
+        case 'D':
+          use_sleep_feature = (! use_sleep_feature);			
+          printPgmString(PSTR(" Sleep Feature "));
+          print_uint8_base10(use_sleep_feature);
+          printPgmString(PSTR(" ]\r\n"));			
         break;
         #endif
         case 'R' : // Restore defaults [IDLE/ALARM]

@@ -35,9 +35,11 @@ void spindle_init()
   SPINDLE_PWM_DDR |= (1<<SPINDLE_PWM_BIT); // Configure as PWM output pin.
   
   // setup PWM
-  TCCRA_REGISTER = (1<<COMB_BIT) | (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);
+  TCCRA_REGISTER = (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);  // changed by Brian R. for zero PWM fix
   TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02; // set to 1/8 Prescaler
-    
+  
+  pwm_gradient = SPINDLE_PWM_RANGE/(settings.rpm_max-settings.rpm_min);
+  
   // start with spindle off
   set_pwm(&spindle_motor, 0,0);
 #else

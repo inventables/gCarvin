@@ -32,10 +32,8 @@
 
 #ifdef CPU_MAP_CARVIN // The Inventables Carvin Controller for Carvey
 
-  #define CARVIN           // Setting this allows other modules to conditionally compile for CARVIN
   #define GEN2_HARDWARE    // The hardware used with the 48V input.  The stepper drivers are SPI controlled
   
-
   // Define serial port pins and interrupt vectors.
   #define SERIAL_RX USART0_RX_vect
   #define SERIAL_UDRE USART0_UDRE_vect
@@ -152,7 +150,7 @@
   
   
   // all these switches use pull ups the "normal" is high or inverted    
-  #define CONTROL_MASK      ((1<<CONTROL_RESET_BIT)|(1<<CONTROL_FEED_HOLD_BIT)|(1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))
+  #define CONTROL_MASK      ((1<<CONTROL_CYCLE_START_BIT)|(1<<CONTROL_SAFETY_DOOR_BIT))
   #define CONTROL_INVERT_MASK 	CONTROL_MASK // the mask of ones that are inverted.
   
   // Define probe switch input pin.  (Probe is smart clamp in gCarvin)
@@ -181,6 +179,7 @@
   #ifndef SPINDLE_PWM_MIN_VALUE
     #define SPINDLE_PWM_MIN_VALUE     1   // Must be greater than zero.
   #endif
+  #define SPINDLE_PWM_RANGE         (SPINDLE_PWM_MAX_VALUE-SPINDLE_PWM_MIN_VALUE)
   #define SPINDLE_PWM_OFF_VALUE     0
   #define SPINDLE_PWM_DDR		DDRH
   #define SPINDLE_PWM_PORT    PORTH
@@ -189,7 +188,7 @@
   // spindle need a soft start to prevent drawing too much current
   #define SPINDLE_SPINUP_RATE 2  // seconds
   #define SPINDLE_SPINDOWN_RATE 3  // seconds
-    #define EXTEND_SPINDLE_LED_FADE 2 // seconds - it looks a little better if the cross fade associated with the spindle lasts a little longer
+  #define EXTEND_SPINDLE_LED_FADE 2 // seconds - it looks a little better if the cross fade associated with the spindle lasts a little longer
 
 #endif
 

@@ -44,6 +44,9 @@
 
 extern int control_button_counter;  // Used to debounce the control button.
 
+int use_sleep_feature;
+int hardware_rev;
+
 struct pwm_analog{
   unsigned char target;        // what is the desired brightness
   unsigned char current_level; // how bright is is now
@@ -64,15 +67,16 @@ void set_button_led();
 
 extern void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration);
 
-extern void print_switch_states();
+extern uint8_t get_hardware_rev();  // return the hardware rev number
 
 extern void reset_cpu();   // software full reset of the CPU
+
+extern void print_switch_states();
 
 // the LEDs
 struct pwm_analog button_led;
 struct pwm_analog door_led;
 struct pwm_analog spindle_led;
 struct pwm_analog spindle_motor;
-
 
 #endif

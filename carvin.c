@@ -8,16 +8,36 @@
 #include "settings.h"
 #include "carvin.h"
 
+// this is used for the hardware ID function
+// These pins are hardwired to either Gnd or 5V 
+// Each new rev of hardware gets a new ID
+#define HRDW_ID_DDR	     DDRC
+#define HRDW_ID_PORT     PORTC
+#define HRDW_ID_PIN      PINC
+#define HRDW_ID_0	     3 		
+#define HRDW_ID_1        4
+#define HRDW_ID_2        5
+#define HRDW_ID_3        6
+#define HRDW_ID_4        7
+#define HRDW_ID_MASK     (1<<HRDW_ID_0 | 1<<HRDW_ID_1 | 1<<HRDW_ID_2 | 1<<HRDW_ID_3 | 1<<HRDW_ID_4) 
+
 int control_button_counter = 0;  // initialize this for use in button debouncing
 
 // setup routine for a Carvin Controller
 void carvin_init()
 {
+  use_sleep_feature = true;
+
+  // setup the hardware I.D. 
+  HRDW_ID_DDR &= ~(HRDW_ID_MASK);  // make pins inputs
+  HRDW_ID_PORT |= HRDW_ID_MASK;  // Turn on the internal pullups
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
 
+  hardware_rev = get_hardware_rev();
+  
   tmc26x_init();  // SPI functions to program the chips
 
   // -------------- Setup PWM on Timer 4 ------------------------------
@@ -95,6 +115,13 @@ ISR(TIMER5_COMPA_vect)
 
   if (pwm_level_change(&spindle_motor))
   {
+    if(spindle_motor.current_level == 0) {  // added by Brian R. for PWM 0 fix
+      SPINDLE_PWM_PORT &= ~(1<<SPINDLE_PWM_BIT);
+      TCCRA_REGISTER &= ~(1<<COMB_BIT | 1<<(COMB_BIT-1));
+    } else {
+      TCCRA_REGISTER = (TCCRA_REGISTER | (1<<COMB_BIT)) & ~(1<<(COMB_BIT-1));
+    }
+    
     SPINDLE_MOTOR_OCR = spindle_motor.current_level;
   }
 
@@ -213,6 +240,16 @@ void set_button_led()
 	{
 		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
 	}
+}
+
+uint8_t get_hardware_rev()
+{
+  uint8_t rev = 0U;
+  
+  rev = (HRDW_ID_PIN & HRDW_ID_MASK) >> HRDW_ID_0;	
+  rev ^= (0b11111);
+  
+  return (rev);
 }
 
 /*
