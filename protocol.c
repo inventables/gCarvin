@@ -64,6 +64,10 @@ void protocol_main_loop()
     system_execute_startup(line); // Execute startup script.
   }
 
+  #ifdef CARVIN
+    set_button_led();
+  #endif
+  
   // ---------------------------------------------------------------------------------
   // Primary loop! Upon a system abort, this exits back to main() to reset the system.
   // This is also where Grbl idles while waiting for something to do.
@@ -159,6 +163,12 @@ void protocol_main_loop()
 
     protocol_execute_realtime();  // Runtime command check point.
     if (sys.abort) { return; } // Bail to main() program loop to reset system.
+	
+	#ifdef SLEEP_ENABLE
+      // Check for sleep conditions and execute auto-park, if timeout duration elapses.
+      sleep_check();    
+    #endif
+	
   }
 
   return; /* Never reached */
@@ -286,6 +296,9 @@ void protocol_exec_rt_system()
         if (rt_exec & EXEC_FEED_HOLD) {
           // Block SAFETY_DOOR, JOG, and SLEEP states from changing to HOLD state.
           if (!(sys.state & (STATE_SAFETY_DOOR | STATE_JOG | STATE_SLEEP))) { sys.state = STATE_HOLD; }
+		  #ifdef CARVIN
+			set_button_led();
+		  #endif
         }
 
         // Execute a safety door stop with a feed hold and disable spindle/coolant.
@@ -363,7 +376,7 @@ void protocol_exec_rt_system()
               sys.state = STATE_IDLE;
             }
             #ifdef CARVIN
-			set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
+              set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);			
             #endif
           }
         }
@@ -636,6 +649,12 @@ static void protocol_exec_rt_suspend()
           // Allows resuming from parking/safety door. Actively checks if safety door is closed and ready to resume.
           if (sys.state == STATE_SAFETY_DOOR) {
             if (!(system_check_safety_door_ajar())) {
+              #ifdef CARVIN
+                if (sys.suspend & SUSPEND_SAFETY_DOOR_AJAR) // prevent doing this more than once
+                {
+                  set_button_led();	
+                }			
+              #endif	
               sys.suspend &= ~(SUSPEND_SAFETY_DOOR_AJAR); // Reset door ajar flag to denote ready to resume.
             }
           }
@@ -725,6 +744,7 @@ static void protocol_exec_rt_suspend()
                 bit_true(sys.step_control, STEP_CONTROL_UPDATE_SPINDLE_PWM);
               } else {
                 spindle_set_state((restore_condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)), restore_spindle_speed);
+                delay_sec(SAFETY_DOOR_SPINDLE_DELAY, DELAY_MODE_SYS_SUSPEND);
               }
             }
             if (sys.spindle_stop_ovr & SPINDLE_STOP_OVR_RESTORE_CYCLE) {
@@ -743,6 +763,13 @@ static void protocol_exec_rt_suspend()
 
       }
     }
+	
+	#ifdef SLEEP_ENABLE
+      // Check for sleep conditions and execute auto-park, if timeout duration elapses.
+      // Sleep is valid for both hold and door states, if the spindle or coolant are on or
+      // set to be re-enabled.
+      sleep_check();
+    #endif
 
     protocol_exec_rt_system();
 

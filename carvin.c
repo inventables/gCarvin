@@ -18,14 +18,7 @@ void carvin_init()
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
 
-  #ifdef GEN1_HARDWARE
-  STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
-  set_stepper_current(0);
-  #endif
-
-  #ifdef GEN2_HARDWARE
   tmc26x_init();  // SPI functions to program the chips
-  #endif
 
   // -------------- Setup PWM on Timer 4 ------------------------------
 
@@ -70,20 +63,14 @@ void carvin_init()
   init_pwm(&spindle_motor);
 
   // fade on the button and door LEDs at startup
-  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
-  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
+  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,DOOR_LED_RISE_TIME);
 
-  // set the stepper currents
-  #ifdef GEN1_HARDWARE
-    set_stepper_current(STEPPER_RUN_CURRENT);
-  #endif
-
-  #ifdef GEN2_HARDWARE
-    //setTMC26xRunCurrent(0); // not run current yet TOD0 Debugging motors
-  #endif
+  setTMC26xRunCurrent(1);
+  
 }
 
-// Timer3 Interrupt
+// Timer5 Interrupt
 // keep this fast to not bother the stepper timing
 // Things done here......
 //  LED Animations
@@ -215,6 +202,18 @@ void set_stepper_current(float current)
 }
 #endif
 
+
+void set_button_led()
+{
+	if ((sys.state == STATE_HOLD) || (sys.state == STATE_SAFETY_DOOR))
+	{
+		throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);		
+	}
+	else
+	{
+		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+	}
+}
 
 /*
  This is a software driver hard reset using the watchdog timer

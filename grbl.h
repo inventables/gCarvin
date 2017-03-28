@@ -22,8 +22,8 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "2.0.0-alpha+4"
-#define GRBL_VERSION_BUILD "20170317"
+#define GRBL_VERSION "2.0.0-alpha"
+#define GRBL_VERSION_BUILD "20170327"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
@@ -48,9 +48,7 @@
 #include "planner.h"
 #ifdef CARVIN
 	#include "carvin.h"
-	#ifdef GEN2_HARDWARE
-		#include "TMC26x.h"
-	#endif
+	#include "TMC26x.h"
 #endif
 #include "coolant_control.h"
 #include "eeprom.h"

@@ -33,7 +33,6 @@
 #ifdef CPU_MAP_CARVIN // The Inventables Carvin Controller for Carvey
 
   #define CARVIN           // Setting this allows other modules to conditionally compile for CARVIN
-  //#define GEN1_HARDWARE  // The first Inventables hardware used on prototypes.  This uses an analog voltage current control
   #define GEN2_HARDWARE    // The hardware used with the 48V input.  The stepper drivers are SPI controlled
   
 

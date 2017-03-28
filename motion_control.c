@@ -276,6 +276,11 @@ uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t parser_
   // Activate the probing state monitor in the stepper module.
   sys_probe_state = PROBE_ACTIVE;
 
+  #ifdef CARVIN
+    throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN, 3); // throb spindle LEDs during probe cycle  
+  #endif
+  
+  
   // Perform probing cycle. Wait here until probe is triggered or motion completes.
   system_set_exec_state_flag(EXEC_CYCLE_START);
   do {
@@ -283,6 +288,9 @@ uint8_t mc_probe_cycle(float *target, plan_line_data_t *pl_data, uint8_t parser_
     if (sys.abort) { return(GC_PROBE_ABORT); } // Check for system abort
   } while (sys.state != STATE_IDLE);
 
+  #ifdef CARVIN
+    set_pwm(&spindle_led, 0,1);  // turn off the throbing spindle LED
+  #endif
   // Probing cycle complete!
 
   // Set state variables and error out, if the probe failed and cycle with error is enabled.
@@ -364,5 +372,8 @@ void mc_reset()
       } else { system_set_exec_alarm(EXEC_ALARM_ABORT_CYCLE); }
       st_go_idle(); // Force kill steppers. Position has likely been lost.
     }
+    #ifdef CARVIN
+      set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,DOOR_LED_RISE_TIME);
+    #endif
   }
 }

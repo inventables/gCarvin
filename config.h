@@ -105,8 +105,8 @@
 // will not be affected by pin sharing.
 // NOTE: Defaults are set for a traditional 3-axis CNC machine. Z-axis first to clear, followed by X & Y.
 #define HOMING_CYCLE_0 (1<<Z_AXIS)                // REQUIRED: First move Z
-#define HOMING_CYCLE_1 (1<<X_AXIS) 
-#define HOMING_CYCLE_2 (1<<Y_AXIS) 
+#define HOMING_CYCLE_1 ((1<<X_AXIS) |(1<<Y_AXIS))
+//#define HOMING_CYCLE_2 (1<<Y_AXIS) 
 
 // Number of homing cycles performed after when the machine initially jogs to limit switches.
 // This help in preventing overshoot and should improve repeatability. This value should be one or
@@ -172,7 +172,7 @@
 
 // After the safety door switch has been toggled and restored, this setting sets the power-up delay
 // between restoring the spindle and coolant and resuming the cycle.
-#define SAFETY_DOOR_SPINDLE_DELAY 1.0 // Float (seconds)
+#define SAFETY_DOOR_SPINDLE_DELAY 3.0 // Float (seconds)
 #define SAFETY_DOOR_COOLANT_DELAY 1.0 // Float (seconds)
 
 // Enable CoreXY kinematics. Use ONLY with CoreXY machines.
@@ -485,8 +485,8 @@
 // uses the homing pull-off distance setting times the LOCATE_SCALAR to pull-off and re-engage
 // the limit switch.
 // NOTE: Both of these values must be greater than 1.0 to ensure proper function.
-#define HOMING_AXIS_SEARCH_SCALAR  1.1 // Uncomment to override defaults in limits.c.
-#define HOMING_AXIS_LOCATE_SCALAR  10.0 // Uncomment to override defaults in limits.c.
+// #define HOMING_AXIS_SEARCH_SCALAR  1.1 // Uncomment to override defaults in limits.c.
+// #define HOMING_AXIS_LOCATE_SCALAR  10.0 // Uncomment to override defaults in limits.c.
 
 // Enable the '$RST=*', '$RST=$', and '$RST=#' eeprom restore commands. There are cases where
 // these commands may be undesirable. Simply comment the desired macro to disable it.
@@ -559,9 +559,9 @@
 // Configure options for the parking motion, if enabled.
 #define PARKING_AXIS Z_AXIS // Define which axis that performs the parking motion
 #define PARKING_TARGET -5.0 // Parking axis target. In mm, as machine coordinate [-max_travel,0].
-#define PARKING_RATE -1.0 // Parking fast rate after pull-out. In mm/min or (-1.0) for seek rate.
-#define PARKING_PULLOUT_RATE 500.0 // Pull-out/plunge slow feed rate in mm/min.
-#define PARKING_PULLOUT_INCREMENT 5.0 // Spindle pull-out and plunge distance in mm. Incremental distance.
+#define PARKING_RATE 800 // Parking fast rate after pull-out. In mm/min or (-1.0) for seek rate.
+#define PARKING_PULLOUT_RATE 200.0 // Pull-out/plunge slow feed rate in mm/min.
+#define PARKING_PULLOUT_INCREMENT 3.0 // Spindle pull-out and plunge distance in mm. Incremental distance.
                                       // Must be positive value or equal to zero.
 
 // This option will automatically disable the laser during a feed hold by invoking a spindle stop
@@ -569,6 +569,17 @@
 // be reenabled by disabling the spindle stop override, if needed. This is purely a safety feature
 // to ensure the laser doesn't inadvertently remain powered while at a stop and cause a fire.
 #define DISABLE_LASER_DURING_HOLD // Default enabled. Comment to disable.
+
+// Enables and configures Grbl's sleep mode feature. If the spindle or coolant are powered and Grbl 
+// is not actively moving or receiving any commands, a sleep timer will start. If any data or commands
+// are received, the sleep timer will reset and restart until the above condition are not satisfied.
+// If the sleep timer elaspes, Grbl will immediately execute the sleep mode by shutting down the spindle
+// and coolant and entering a safe sleep state. If parking is enabled, Grbl will park the machine as
+// well. While in sleep mode, only a hard/soft reset will exit it and the job will be unrecoverable.
+// NOTE: Sleep mode is a safety feature, primarily to address communication disconnect problems. To 
+// keep Grbl from sleeping, employ a stream of '?' status report commands as a connection "heartbeat".
+//#define SLEEP_ENABLE  // Default disabled. Uncomment to enable.
+#define SLEEP_DURATION 5.0 // Float (0.25 - 61.0) seconds before sleep mode is executed.
 
 // ---------------------------------------------------------------------------------------
 

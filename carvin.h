@@ -21,15 +21,22 @@
 #define DOOR_LED_LEVEL_IDLE 255
 #define DOOR_LED_LEVEL_RUN 100
 #define DOOR_LED_THROB_MIN 60
+#define DOOR_LED_RISE_TIME 3  // the time it takes to fade on
+
+#define DOOR_SLEEP_THROB_RATE 4  // define how the sleep throb looks
+#define DOOR_SLEEP_THROB_MIN 5
 
 #define SPINDLE_LED_LEVEL_IDLE 0
 #define SPINDLE_LED_LEVEL_RUN 255
 #define SPINDLE_LED_THROB_MIN 60
+#define SPINDLE_LED_RISE_TIME 3  // the time it takes to fade on
+#define SPINDLE_LED_THROB_RATE 2
 
 #define BUTTON_LED_LEVEL_ON 255
 #define BUTTON_LED_LEVEL_OFF 0
 #define BUTTON_LED_THROB_MIN 60
 #define BUTTON_LED_THROB_RATE 1 // 1/2 second
+#define BUTTON_LED_RISE_TIME 3  // the time it takes to fade on
 
 #define CARVIN_TIMING_CTC 120  // timer interrupt compare value...set this for a roughly 512 hz interrupt, so we can fade 256 levels in 1/2 second
 
@@ -52,6 +59,8 @@ extern void carvin_init();
 void init_pwm(struct pwm_analog * led);
 extern void set_pwm(struct pwm_analog * led, unsigned char target_level, unsigned char duration);
 int pwm_level_change(struct pwm_analog * led);  // checks to see if a level change is needed
+
+void set_button_led();
 
 extern void throb_pwm(struct pwm_analog * pwm, uint8_t min_throb, uint8_t duration);
 

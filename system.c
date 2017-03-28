@@ -100,39 +100,22 @@ void checkControlPins()
   
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
-    if (bit_istrue(pin,CONTROL_PIN_INDEX_RESET)) {
-      mc_reset();
-    }
-    else if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) //the front button
+    if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) //the front button
     {	
       if (sys.state != STATE_IDLE)  // button only does something when not in idle
       {
-        if (sys.state == STATE_HOLD)
-        {		
-          if (bit_istrue(sys.suspend, SUSPEND_INITIATE_RESTORE))
-          {
-            bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR); 
-          }
-          else
-          {					
-            bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
-          }
-        }
-        else
-        {
-          bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR); 
-        }
+        if (sys.state == STATE_SAFETY_DOOR || sys.state == STATE_HOLD)
+		{								
+		  system_set_exec_state_flag(EXEC_CYCLE_START);
+		}
+		else
+		{
+          system_set_exec_state_flag(EXEC_SAFETY_DOOR);			 
+		}
       }
- 
-    #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
-    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_FEED_HOLD)) {
-        bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
-    }
-    #else
     } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
-        bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
+        system_set_exec_state_flag(EXEC_SAFETY_DOOR);
     }
-    #endif 
   }
 }
 #endif
@@ -284,25 +267,25 @@ uint8_t system_execute_line(char *line)
           break;
 		#ifdef CARVIN
 		case 'K':
-			//tmc26x_init();  // just for testing
-			reset_cpu();  // hard reset
+          //tmc26x_init();  // just for testing
+          reset_cpu();  // hard reset
 		break;
 		case 'L':
-		    if(line[++char_counter] == '1')
-			{
-				throb_pwm(&button_led, BUTTON_LED_THROB_MIN,2);
-				throb_pwm(&door_led, DOOR_LED_THROB_MIN,2);
-				throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
-			}
-			else
-			{
-				//turn all LEDS off
-				set_pwm(&button_led, 0,4);
-				set_pwm(&door_led, 0,4);
-				set_pwm(&spindle_led, 0,4);
-			}
-		break;
-		#endif
+          if(line[++char_counter] == '1')
+          {
+            throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);
+            throb_pwm(&door_led, DOOR_LED_THROB_MIN,DOOR_SLEEP_THROB_RATE);
+            throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
+          }
+          else
+          {
+            //turn all LEDS off
+            set_pwm(&button_led, 0,BUTTON_LED_RISE_TIME);
+            set_pwm(&door_led, 0,DOOR_LED_RISE_TIME);
+            set_pwm(&spindle_led, 0,SPINDLE_LED_RISE_TIME);
+          }
+        break;
+        #endif
         case 'R' : // Restore defaults [IDLE/ALARM]
           if ((line[2] != 'S') || (line[3] != 'T') || (line[4] != '=') || (line[6] != 0)) { return(STATUS_INVALID_STATEMENT); }
           switch (line[5]) {
