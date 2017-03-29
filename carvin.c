@@ -38,6 +38,9 @@ void carvin_init()
 
   hardware_rev = get_hardware_rev();
   
+  spindle_current_init( hardware_rev >= 1U );
+  spindle_current_set_threshold( 1.05 );
+  
   tmc26x_init();  // SPI functions to program the chips
 
   // -------------- Setup PWM on Timer 4 ------------------------------
@@ -132,6 +135,14 @@ ISR(TIMER5_COMPA_vect)
     {    
       checkControlPins();
     }
+  }
+  
+  if ( spindle_current_proc() )
+  {
+    printPgmString(PSTR("[OverCurrent:"));
+    printFloat(spindle_current_get(), 2);
+    printPgmString(PSTR("]\r\n"));
+    system_set_exec_state_flag(EXEC_SAFETY_DOOR);
   }
 }
 

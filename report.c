@@ -537,6 +537,13 @@ void report_realtime_status()
     #endif      
   #endif
 
+  #ifdef CARVIN
+    if ( spindle_current_is_enabled() ) {
+      printPgmString(PSTR("|I:"));
+      printFloat(spindle_current_get(), 2);
+    }
+  #endif
+  
   #ifdef REPORT_FIELD_PIN_STATE
     uint8_t lim_pin_state = limits_get_state();
     uint8_t ctrl_pin_state = system_control_get_state();

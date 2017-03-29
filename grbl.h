@@ -52,6 +52,7 @@
 	#include "carvin.h"
 	#include "TMC26x.h"
     #include "sleep.h"
+    #include "spindle_current.h"
 #endif
 #include "coolant_control.h"
 #include "eeprom.h"
