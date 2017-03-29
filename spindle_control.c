@@ -35,9 +35,11 @@ void spindle_init()
   SPINDLE_PWM_DDR |= (1<<SPINDLE_PWM_BIT); // Configure as PWM output pin.
   
   // setup PWM
-  TCCRA_REGISTER = (1<<COMB_BIT) | (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);
+  TCCRA_REGISTER = (1<<WAVE1_REGISTER) | (1<<WAVE0_REGISTER);  // changed by Brian R. for zero PWM fix
   TCCRB_REGISTER = (TCCRB_REGISTER & 0b11111000) | 0x02; // set to 1/8 Prescaler
-    
+  
+  pwm_gradient = SPINDLE_PWM_RANGE/(settings.rpm_max-settings.rpm_min);
+  
   // start with spindle off
   set_pwm(&spindle_motor, 0,0);
 #else
@@ -109,7 +111,15 @@ void spindle_stop()
 	
   // LED cross fade
   set_pwm(&spindle_led, 0, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade off spindle LED
-  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
+  // insleep 
+  if ((sys.state & (STATE_SLEEP)))
+  {
+	throb_pwm(&door_led, DOOR_SLEEP_THROB_MIN,DOOR_SLEEP_THROB_RATE);
+  }  
+  else  
+  {
+	set_pwm(&door_led, DOOR_LED_LEVEL_IDLE, SPINDLE_SPINDOWN_RATE + EXTEND_SPINDLE_LED_FADE); // fade on door LED
+  }
 #else
 
   #ifdef VARIABLE_SPINDLE
@@ -140,16 +150,17 @@ void spindle_stop()
     if (pwm_value == SPINDLE_PWM_OFF_VALUE) {
       spindle_stop();
     } else {
-    #ifdef CARVIN
-
-    set_pwm(&spindle_motor, pwm_value, SPINDLE_SPINUP_RATE);  // fade on spindle
-    set_pwm(&spindle_led, SPINDLE_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
-    set_pwm(&door_led, DOOR_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
-
-    #else
-      SPINDLE_OCR_REGISTER = pwm_value; // Set PWM output level.
-      SPINDLE_TCCRA_REGISTER |= (1<<SPINDLE_COMB_BIT); // Ensure PWM output is enabled.
-    #endif
+      #ifdef CARVIN
+	    if (pwm_value != spindle_motor.target)
+        {
+          set_pwm(&spindle_motor, pwm_value, SPINDLE_SPINUP_RATE);  // fade on spindle
+          set_pwm(&spindle_led, SPINDLE_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);    // fade on spindle LED
+          set_pwm(&door_led, DOOR_LED_LEVEL_RUN, SPINDLE_SPINUP_RATE + EXTEND_SPINDLE_LED_FADE);      // fade off door
+        }
+      #else
+        SPINDLE_OCR_REGISTER = pwm_value; // Set PWM output level.
+        SPINDLE_TCCRA_REGISTER |= (1<<SPINDLE_COMB_BIT); // Ensure PWM output is enabled.
+      #endif
     }
   }
 

@@ -45,6 +45,7 @@ uint8_t system_control_get_state()
   #ifdef INVERT_CONTROL_PIN_MASK
     pin ^= INVERT_CONTROL_PIN_MASK;
   #endif
+
   if (pin) {
     #ifdef ENABLE_SAFETY_DOOR_INPUT_PIN
       if (bit_isfalse(pin,(1<<CONTROL_SAFETY_DOOR_BIT))) { control_state |= CONTROL_PIN_INDEX_SAFETY_DOOR; }
@@ -53,6 +54,7 @@ uint8_t system_control_get_state()
     if (bit_isfalse(pin,(1<<CONTROL_FEED_HOLD_BIT))) { control_state |= CONTROL_PIN_INDEX_FEED_HOLD; }
     if (bit_isfalse(pin,(1<<CONTROL_CYCLE_START_BIT))) { control_state |= CONTROL_PIN_INDEX_CYCLE_START; }
   }
+
   return(control_state);
 }
 
@@ -94,48 +96,26 @@ ISR(CONTROL_INT_vect)
 #ifdef CARVIN
 void checkControlPins()
 {
-  uint8_t pin = (CONTROL_PIN & CONTROL_MASK);
-  
-  // if some are inverted logic pins they need flipped
-  #ifdef CONTROL_INVERT_MASK
-    pin ^= CONTROL_INVERT_MASK;
-  #endif
+  uint8_t pin = system_control_get_state();
   
   // Enter only if any CONTROL pin is detected as active.
   if (pin) { 
-    if (bit_istrue(pin,bit(CONTROL_RESET_BIT))) {
-      mc_reset();
-    }
-    else if (bit_istrue(pin,bit(CONTROL_CYCLE_START_BIT))) //the front button
+    if (bit_istrue(pin,CONTROL_PIN_INDEX_CYCLE_START)) //the front button
     {	
       if (sys.state != STATE_IDLE)  // button only does something when not in idle
       {
-        if (sys.state == STATE_HOLD)
-        {		
-          if (bit_istrue(sys.suspend, SUSPEND_INITIATE_RESTORE))
-          {
-            bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR); 
-          }
-          else
-          {					
-            bit_true(sys_rt_exec_state, EXEC_CYCLE_START);
-          }
-        }
-        else
-        {
-          bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR); 
-        }
+        if (sys.state == STATE_SAFETY_DOOR || sys.state == STATE_HOLD)
+		{								
+		  system_set_exec_state_flag(EXEC_CYCLE_START);
+		}
+		else
+		{
+          system_set_exec_state_flag(EXEC_SAFETY_DOOR);			 
+		}
       }
- 
-    #ifndef ENABLE_SAFETY_DOOR_INPUT_PIN
-    } else if (bit_istrue(pin,bit(CONTROL_FEED_HOLD_BIT))) {
-        bit_true(sys_rt_exec_state, EXEC_FEED_HOLD);
+    } else if (bit_istrue(pin,CONTROL_PIN_INDEX_SAFETY_DOOR)) {
+        system_set_exec_state_flag(EXEC_SAFETY_DOOR);
     }
-    #else
-    } else if (bit_istrue(pin,bit(CONTROL_SAFETY_DOOR_BIT))) {
-        bit_true(sys_rt_exec_state, EXEC_SAFETY_DOOR);
-    }
-    #endif 
   }
 }
 #endif
@@ -261,8 +241,14 @@ uint8_t system_execute_line(char *line)
           if (line[2] == 0) { print_switch_states(); }
           else 
           #endif
-          if ((line[2] != 'L') || (line[3] != 'P') || (line[4] != 0)) {  return(STATUS_INVALID_STATEMENT); }
-          system_set_exec_state_flag(EXEC_SLEEP); // Set to execute sleep mode immediately
+          if ((line[2] == 'L') || (line[3] == 'P') || (line[4] == 0)) 
+          {   
+            system_set_exec_state_flag(EXEC_SLEEP); // Set to execute sleep mode immediately
+          }
+          else
+          {
+            return(STATUS_INVALID_STATEMENT);
+          }
           break;
         case 'I' : // Print or store build info. [IDLE/ALARM]
           if ( line[++char_counter] == 0 ) {
@@ -281,25 +267,30 @@ uint8_t system_execute_line(char *line)
           break;
 		#ifdef CARVIN
 		case 'K':
-			//tmc26x_init();  // just for testing
-			reset_cpu();  // hard reset
+          reset_cpu();  // hard reset
 		break;
 		case 'L':
-		    if(line[++char_counter] == '1')
-			{
-				throb_pwm(&button_led, BUTTON_LED_THROB_MIN,2);
-				throb_pwm(&door_led, DOOR_LED_THROB_MIN,2);
-				throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
-			}
-			else
-			{
-				//turn all LEDS off
-				set_pwm(&button_led, 0,4);
-				set_pwm(&door_led, 0,4);
-				set_pwm(&spindle_led, 0,4);
-			}
-		break;
-		#endif
+          if(line[++char_counter] == '1')
+          {
+            throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);
+            throb_pwm(&door_led, DOOR_LED_THROB_MIN,DOOR_SLEEP_THROB_RATE);
+            throb_pwm(&spindle_led, SPINDLE_LED_THROB_MIN,2);
+          }
+          else
+          {
+            //turn all LEDS off
+            set_pwm(&button_led, 0,BUTTON_LED_RISE_TIME);
+            set_pwm(&door_led, 0,DOOR_LED_RISE_TIME);
+            set_pwm(&spindle_led, 0,SPINDLE_LED_RISE_TIME);
+          }
+        break;
+        case 'D':
+          use_sleep_feature = (! use_sleep_feature);			
+          printPgmString(PSTR(" Sleep Feature "));
+          print_uint8_base10(use_sleep_feature);
+          printPgmString(PSTR(" ]\r\n"));			
+        break;
+        #endif
         case 'R' : // Restore defaults [IDLE/ALARM]
           if ((line[2] != 'S') || (line[3] != 'T') || (line[4] != '=') || (line[6] != 0)) { return(STATUS_INVALID_STATEMENT); }
           switch (line[5]) {

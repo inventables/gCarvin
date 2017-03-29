@@ -8,24 +8,40 @@
 #include "settings.h"
 #include "carvin.h"
 
+// this is used for the hardware ID function
+// These pins are hardwired to either Gnd or 5V 
+// Each new rev of hardware gets a new ID
+#define HRDW_ID_DDR	     DDRC
+#define HRDW_ID_PORT     PORTC
+#define HRDW_ID_PIN      PINC
+#define HRDW_ID_0	     3 		
+#define HRDW_ID_1        4
+#define HRDW_ID_2        5
+#define HRDW_ID_3        6
+#define HRDW_ID_4        7
+#define HRDW_ID_MASK     (1<<HRDW_ID_0 | 1<<HRDW_ID_1 | 1<<HRDW_ID_2 | 1<<HRDW_ID_3 | 1<<HRDW_ID_4) 
+
 int control_button_counter = 0;  // initialize this for use in button debouncing
 
 // setup routine for a Carvin Controller
 void carvin_init()
 {
+  use_sleep_feature = true;
+
+  // setup the hardware I.D. 
+  HRDW_ID_DDR &= ~(HRDW_ID_MASK);  // make pins inputs
+  HRDW_ID_PORT |= HRDW_ID_MASK;  // Turn on the internal pullups
   // setup the PWM pins as outputs
   BUTTON_LED_DDR |= (1<<BUTTON_LED_BIT);
   DOOR_LED_DDR |= (1<<DOOR_LED_BIT);
   SPINDLE_LED_DDR |= (1<<SPINDLE_LED_BIT);
 
-  #ifdef GEN1_HARDWARE
-  STEPPER_VREF_DDR |= (1<<STEPPER_VREF_BIT);
-  set_stepper_current(0);
-  #endif
-
-  #ifdef GEN2_HARDWARE
+  hardware_rev = get_hardware_rev();
+  
+  spindle_current_init( hardware_rev >= 1U );
+  spindle_current_set_threshold( 1.05 );
+  
   tmc26x_init();  // SPI functions to program the chips
-  #endif
 
   // -------------- Setup PWM on Timer 4 ------------------------------
 
@@ -70,20 +86,14 @@ void carvin_init()
   init_pwm(&spindle_motor);
 
   // fade on the button and door LEDs at startup
-  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,3);
-  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,3);
+  set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+  set_pwm(&door_led, DOOR_LED_LEVEL_IDLE,DOOR_LED_RISE_TIME);
 
-  // set the stepper currents
-  #ifdef GEN1_HARDWARE
-    set_stepper_current(STEPPER_RUN_CURRENT);
-  #endif
-
-  #ifdef GEN2_HARDWARE
-    //setTMC26xRunCurrent(0); // not run current yet TOD0 Debugging motors
-  #endif
+  setTMC26xRunCurrent(1);
+  
 }
 
-// Timer3 Interrupt
+// Timer5 Interrupt
 // keep this fast to not bother the stepper timing
 // Things done here......
 //  LED Animations
@@ -108,6 +118,13 @@ ISR(TIMER5_COMPA_vect)
 
   if (pwm_level_change(&spindle_motor))
   {
+    if(spindle_motor.current_level == 0) {  // added by Brian R. for PWM 0 fix
+      SPINDLE_PWM_PORT &= ~(1<<SPINDLE_PWM_BIT);
+      TCCRA_REGISTER &= ~(1<<COMB_BIT | 1<<(COMB_BIT-1));
+    } else {
+      TCCRA_REGISTER = (TCCRA_REGISTER | (1<<COMB_BIT)) & ~(1<<(COMB_BIT-1));
+    }
+    
     SPINDLE_MOTOR_OCR = spindle_motor.current_level;
   }
 
@@ -118,6 +135,14 @@ ISR(TIMER5_COMPA_vect)
     {    
       checkControlPins();
     }
+  }
+  
+  if ( spindle_current_proc() )
+  {
+    printPgmString(PSTR("[OverCurrent:"));
+    printFloat(spindle_current_get(), 2);
+    printPgmString(PSTR("]\r\n"));
+    system_set_exec_state_flag(EXEC_SAFETY_DOOR);
   }
 }
 
@@ -215,6 +240,28 @@ void set_stepper_current(float current)
 }
 #endif
 
+
+void set_button_led()
+{
+	if ((sys.state == STATE_HOLD) || (sys.state == STATE_SAFETY_DOOR))
+	{
+		throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);		
+	}
+	else
+	{
+		set_pwm(&button_led, BUTTON_LED_LEVEL_ON,BUTTON_LED_RISE_TIME);
+	}
+}
+
+uint8_t get_hardware_rev()
+{
+  uint8_t rev = 0U;
+  
+  rev = (HRDW_ID_PIN & HRDW_ID_MASK) >> HRDW_ID_0;	
+  rev ^= (0b11111);
+  
+  return (rev);
+}
 
 /*
  This is a software driver hard reset using the watchdog timer

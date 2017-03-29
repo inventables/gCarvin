@@ -58,10 +58,10 @@
   #define DEFAULT_LASER_MODE 0 // false
   #define DEFAULT_HOMING_ENABLE 1  // true
   #define DEFAULT_HOMING_DIR_MASK ((1<<X_AXIS)|(1<<Y_AXIS))
-  #define DEFAULT_HOMING_FEED_RATE 25.0 // mm/min
+  #define DEFAULT_HOMING_FEED_RATE 75.0 // mm/min
   #define DEFAULT_HOMING_SEEK_RATE 1500.0 // mm/min
   #define DEFAULT_HOMING_DEBOUNCE_DELAY 250 // msec (0-65k)
-  #define DEFAULT_HOMING_PULLOFF 1.0 // mm
+  #define DEFAULT_HOMING_PULLOFF 4.0 // mm
 #endif
 
 #ifdef DEFAULTS_SHERLINE_5400

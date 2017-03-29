@@ -208,10 +208,7 @@ void st_wake_up()
 {
   // Enable stepper drivers.
 #ifdef CARVIN
-  #ifdef GEN2_HARDWARE
-    //setTMC26xRunCurrent(true); // turned this off while working on homing bug
-  #endif
-  	STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);  // this is the GEN2_HARDWARE TODO add the GEN1
+  STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
 #else
 	  
   if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
@@ -230,6 +227,10 @@ void st_wake_up()
   #else // Normal operation
     // Set step pulse time. Ad hoc computation from oscilloscope. Uses two's complement.
     st.step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
+  #endif
+
+  #ifdef CARVIN  
+    setTMC26xRunCurrent(1); 
   #endif
 
   // Enable Stepper Driver Interrupt
@@ -254,12 +255,8 @@ void st_go_idle()
     pin_state = true; // Override. Disable steppers.
   }
   
-#ifdef CARVIN
-
-  #ifdef GEN2_HARDWARE    
-    //setTMC26xRunCurrent(false);	
-	
-	// if we are in alarm, we can turn the motors off, else leave them on
+  #ifdef CARVIN
+    // if we are in alarm, we can turn the motors off, else leave them on
 	// this allows hand movement before homing
 	
 	if (sys.state == STATE_ALARM)	{  // think about STATE_HOMING
@@ -270,13 +267,11 @@ void st_go_idle()
 	{
 		STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);	
 	}
+  #else
+    if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { pin_state = !pin_state; } // Apply pin invert.
+    if (pin_state) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+    else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
   #endif
-  
-#else
-  if (bit_istrue(settings.flags,BITFLAG_INVERT_ST_ENABLE)) { pin_state = !pin_state; } // Apply pin invert.
-  if (pin_state) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
-  else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
-#endif
 }
 
 

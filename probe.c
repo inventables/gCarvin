@@ -63,4 +63,10 @@ void probe_state_monitor()
     memcpy(sys_probe_position, sys_position, sizeof(sys_position));
     bit_true(sys_rt_exec_state, EXEC_MOTION_CANCEL);
   }
+  #ifdef CARVIN
+  else
+  {
+    spindle_led.throb = true;
+  }
+  #endif
 }
