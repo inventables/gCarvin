@@ -1,7 +1,7 @@
 /*
   spindle_current.h - Handles monitoring spindle current
   
-  Copyright (c) 2016 Inventables Inc.
+  Copyright (c) 2016, 2017 Inventables Inc.
 */
 
 #include "spindle_current.h"
