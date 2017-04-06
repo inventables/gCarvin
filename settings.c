@@ -108,6 +108,10 @@ void settings_restore(uint8_t restore_flag) {
     settings.max_travel[Z_AXIS] = (-DEFAULT_Z_MAX_TRAVEL);
 
     write_global_settings();
+    
+    #ifdef CARVIN
+      ps_settings_restore();
+    #endif
   }
 
   if (restore_flag & SETTINGS_RESTORE_PARAMETERS) {

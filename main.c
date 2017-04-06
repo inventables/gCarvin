@@ -32,7 +32,8 @@ int main(void)
   serial_init();   // Setup serial baud rate and interrupts
   settings_init(); // Load Grbl settings from EEPROM
 #ifdef CARVIN
-	carvin_init();  // setup carvin I/O and wait for initial button push
+  ps_settings_init();
+  carvin_init();  // setup carvin I/O and wait for initial button push
 #endif
   stepper_init();  // Configure stepper pins and interrupt timers
   system_init();   // Configure pinout pins and pin-change interrupt
@@ -84,7 +85,7 @@ int main(void)
     coolant_init();
     limits_init();
     probe_init();
-	sleep_init();
+	  sleep_init();
     plan_reset(); // Clear block buffer and planner variables
     st_reset(); // Clear stepper subsystem variables.
 
@@ -94,7 +95,7 @@ int main(void)
 
     // Print welcome message. Indicates an initialization has occured at power-up or with a reset.
     report_init_message();
-
+    
     // Start Grbl main loop. Processes program inputs and executes them.
     protocol_main_loop();
 

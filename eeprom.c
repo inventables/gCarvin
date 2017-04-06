@@ -148,4 +148,20 @@ int memcpy_from_eeprom_with_checksum(char *destination, unsigned int source, uns
   return(checksum == eeprom_get_char(source));
 }
 
+void memcpy_to_eeprom_no_checksum(unsigned int destination, const char *source, unsigned int size)
+{
+  for(; size > 0; size--) {
+    eeprom_put_char(destination++, *(source++)); 
+  }
+}
+
+void memcpy_from_eeprom_no_checksum(char *destination, unsigned int source, unsigned int size)
+{
+  unsigned char data = 0;
+  for(; size > 0; size--) {
+    data = eeprom_get_char(source++);
+    *(destination++) = data;
+  }
+}
+
 // end of file

@@ -1,7 +1,7 @@
 /*
   spindle_current.h - Handles monitoring spindle current
   
-  Copyright (c) 2016 Inventables Inc.
+  Copyright (c) 2016, 2017 Inventables Inc.
 */
 
 #include "spindle_current.h"
@@ -15,12 +15,16 @@
 static uint8_t enabled = 0U;
 static uint16_t spindle_current;
 static uint16_t spindle_I_max;
+static float spindle_I_max_amps;
 static uint8_t spindle_current_counter;
 
 void spindle_current_init( uint8_t enable )
 {
   enabled = enable;
-  spindle_I_max = (uint16_t)(SPINDLE_I_THRESHOLD/SPINDLE_CURRENT_AMPS_PER_COUNT);
+  
+  spindle_I_max_amps = SPINDLE_I_THRESHOLD;
+  ps_settings_get_setting( 0, (uint8_t*)(&spindle_I_max_amps) );
+  spindle_current_set_threshold( spindle_I_max_amps );
   
   if ( enabled )
   {
@@ -53,12 +57,20 @@ uint8_t spindle_current_proc( void )
     if ( spindle_current_counter == 0U )
     {
       unsigned long measurement = ADCL;
+      float previous_spindle_I_max_amps = spindle_I_max_amps;
       measurement += ((long)ADCH) << 8U;
       
       // apply filter algorithm and store result
       spindle_current = (SPINDLE_I_AVG_CONST * (long)spindle_current 
                          + (SPINDLE_I_MULTIPLIER - SPINDLE_I_AVG_CONST) * measurement )
                         / SPINDLE_I_MULTIPLIER;
+      
+      ps_settings_get_setting( 0, (uint8_t*)(&spindle_I_max_amps) );
+      
+      if ( spindle_I_max_amps != spindle_I_max_amps )
+      {
+        spindle_current_set_threshold( spindle_I_max_amps );
+      }
       
       // check against threshold
       if ( spindle_current > spindle_I_max )

@@ -226,6 +226,16 @@ void report_grbl_settings() {
     }
     val += AXIS_SETTINGS_INCREMENT;
   }
+  
+#ifdef CARVIN  
+  {
+    float spindle_current_threshold = 0.0;
+    ps_settings_get_setting( 0, (uint8_t*)(&spindle_current_threshold) );
+    printPgmString(PSTR("$800="));
+    printFloat( spindle_current_threshold, N_DECIMAL_SETTINGVALUE );
+    report_util_line_feed();
+  }
+#endif
 }
 
 
@@ -368,6 +378,10 @@ void report_build_info(char *line)
 {
   printPgmString(PSTR("[VER:" GRBL_VERSION "." GRBL_VERSION_BUILD ":"));
   printString(line);
+  #ifdef CARVIN
+    printPgmString(PSTR(":CTRL"));
+    print_uint8_base10( (uint8_t)hardware_rev );
+  #endif
   report_util_feedback_line_feed();
   printPgmString(PSTR("[OPT:")); // Generate compile-time build option list
   #ifdef VARIABLE_SPINDLE
