@@ -33,7 +33,6 @@ static void set_eeprom_storage_size( uint8_t size );
 static void set_eeprom_header_and_revision( void );
 static void write_ps_settings_to_eeprom( uint8_t* data, uint8_t data_size );
 static uint8_t validate_eeprom_image( const uint8_t* data );
-static void* my_memcpy(void *dest, const void *src, unsigned int n);
 
 void ps_settings_init( void )
 {
@@ -74,9 +73,9 @@ void ps_settings_init( void )
                                                           eeprom_data_size );
       if ( eeprom_checksum )
       {
-        my_memcpy( ps_settings_ram_storage,
-                   eeprom_data,
-                   min( eeprom_data_size, storage_size ) );
+        memcpy( ps_settings_ram_storage,
+                eeprom_data,
+                min( eeprom_data_size, storage_size ) );
       }
       
       if ( eeprom_data_size != storage_size )
@@ -119,9 +118,9 @@ uint8_t ps_settings_store_setting( uint8_t parameter, uint8_t* value )
   if ( parameter <= PS_SETTINGS_NUM_PARAMETERS )
   {
     success = 0U; //(STATUS_OK)
-    my_memcpy( ps_settings_ram_storage + ps_settings_metadata[ parameter ].offset,
-               value,
-               ps_settings_metadata[ parameter ].size );
+    memcpy( ps_settings_ram_storage + ps_settings_metadata[ parameter ].offset,
+            value,
+            ps_settings_metadata[ parameter ].size );
             
     write_ps_settings_to_eeprom( ps_settings_ram_storage, storage_size );
   }
@@ -138,9 +137,9 @@ uint8_t ps_settings_get_setting( uint8_t parameter, uint8_t* value )
     if ( ps_settings_ram_storage )
     {
       success = 0U; //(STATUS_OK)
-      my_memcpy( value, 
-                 ps_settings_ram_storage + ps_settings_metadata[ parameter ].offset, 
-                 ps_settings_metadata[ parameter ].size );
+      memcpy( value, 
+              ps_settings_ram_storage + ps_settings_metadata[ parameter ].offset, 
+              ps_settings_metadata[ parameter ].size );
     }
   }
   
@@ -154,9 +153,9 @@ void set_default_values( uint8_t* data )
   
   for ( ; element <= PS_SETTINGS_NUM_PARAMETERS; ++element )
   {
-    my_memcpy( &data[ ps_settings_metadata[ element ].offset ], 
-               &ps_settings_metadata[ element ].default_value.integer,
-               ps_settings_metadata[ element ].size );
+    memcpy( &data[ ps_settings_metadata[ element ].offset ], 
+            &ps_settings_metadata[ element ].default_value.integer,
+            ps_settings_metadata[ element ].size );
   }
 }
 
@@ -179,18 +178,4 @@ void set_eeprom_header_and_revision( void )
 {
   memcpy_to_eeprom_no_checksum( PS_SETTINGS_EEPROM_OFFSET, ps_settings_header, 30U );
   eeprom_put_char( PS_SETTINGS_EEPROM_OFFSET + PS_SETTINGS_EEPROM_REVISION_OFFSET, PS_SETTINGS_VERSION );
-}
-
-void* my_memcpy( void *dest, const void *src, unsigned int n )
-{
-  void * retVal = dest;
-  if ( dest && src )
-  {
-    while ( n > 0 )
-    {
-      *(char*)src++ = *(char*)dest++;
-      --n;
-    }
-  }
-  return ( retVal );
 }

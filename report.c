@@ -378,12 +378,11 @@ void report_build_info(char *line)
 {
   printPgmString(PSTR("[VER:" GRBL_VERSION "." GRBL_VERSION_BUILD ":"));
   printString(line);
-  report_util_feedback_line_feed();
   #ifdef CARVIN
-    printPgmString(PSTR("[HW Rev:"));
+    printPgmString(PSTR("CTRL"));
     print_uint8_base10( (uint8_t)hardware_rev );
-    report_util_feedback_line_feed();
   #endif
+  report_util_feedback_line_feed();
   printPgmString(PSTR("[OPT:")); // Generate compile-time build option list
   #ifdef VARIABLE_SPINDLE
     serial_write('V');
