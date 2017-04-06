@@ -379,7 +379,7 @@ void report_build_info(char *line)
   printPgmString(PSTR("[VER:" GRBL_VERSION "." GRBL_VERSION_BUILD ":"));
   printString(line);
   #ifdef CARVIN
-    printPgmString(PSTR("CTRL"));
+    printPgmString(PSTR(":CTRL"));
     print_uint8_base10( (uint8_t)hardware_rev );
   #endif
   report_util_feedback_line_feed();
