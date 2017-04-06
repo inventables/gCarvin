@@ -22,7 +22,7 @@
 #define grbl_h
 
 // Grbl versioning system
-#define GRBL_VERSION "2.0.0-alpha"
+#define GRBL_VERSION "2.0.0"
 #define GRBL_VERSION_BUILD "20170406"
 
 // Define standard libraries used by Grbl.
