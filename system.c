@@ -341,8 +341,21 @@ uint8_t system_execute_line(char *line)
             }
           } else { // Store global setting.
             if(!read_float(line, &char_counter, &value)) { return(STATUS_BAD_NUMBER_FORMAT); }
-            if((line[char_counter] != 0) || (parameter > 255)) { return(STATUS_INVALID_STATEMENT); }
-            return(settings_store_global_setting((uint8_t)parameter, value));
+            #ifdef CARVIN
+              if((line[char_counter] != 0)) { return(STATUS_INVALID_STATEMENT); }
+              if(((parameter > 255) && (parameter < 800)) || (parameter > 1055)) { return(STATUS_INVALID_STATEMENT); }
+              if(parameter <= 255)
+              {
+                return(settings_store_global_setting((uint8_t)parameter, value));
+              }
+              else
+              {
+                return(ps_settings_store_setting( (uint8_t)(parameter - 800), (uint8_t*)(&value) ));
+              }
+            #else
+              if((line[char_counter] != 0) || (parameter > 255)) { return(STATUS_INVALID_STATEMENT); }
+              return(settings_store_global_setting((uint8_t)parameter, value));
+            #endif
           }
       }
   }

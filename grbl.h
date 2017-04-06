@@ -23,7 +23,7 @@
 
 // Grbl versioning system
 #define GRBL_VERSION "2.0.0-alpha"
-#define GRBL_VERSION_BUILD "20170403"
+#define GRBL_VERSION_BUILD "20170406"
 
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
@@ -53,6 +53,7 @@
 	#include "TMC26x.h"
     #include "sleep.h"
     #include "spindle_current.h"
+    #include "ps_settings.h"
 #endif
 #include "coolant_control.h"
 #include "eeprom.h"

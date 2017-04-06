@@ -226,6 +226,16 @@ void report_grbl_settings() {
     }
     val += AXIS_SETTINGS_INCREMENT;
   }
+  
+#ifdef CARVIN  
+  {
+    float spindle_current_threshold = 0.0;
+    ps_settings_get_setting( 0, (uint8_t*)(&spindle_current_threshold) );
+    printPgmString(PSTR("$800="));
+    printFloat( spindle_current_threshold, N_DECIMAL_SETTINGVALUE );
+    report_util_line_feed();
+  }
+#endif
 }
 
 
