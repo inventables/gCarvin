@@ -200,6 +200,32 @@ uint8_t settings_read_coord_data(uint8_t coord_select, float *coord_data)
 uint8_t read_global_settings() {
   // Check version-byte of eeprom
   uint8_t version = eeprom_get_char(0);
+#ifdef CARVIN
+  if (version < SETTINGS_VERSION ) {
+    if (version == 10U) { // upgrade from gCarvin 1.1.5
+      /// @note settings_t struct in version 10 is the same in size and content as in 12
+      if (!(memcpy_from_eeprom_with_checksum((char*)&settings, EEPROM_ADDR_GLOBAL, sizeof(settings_t)))) {
+        return(false);
+      }
+      // no new settings to handle
+      write_global_settings();
+    }
+    else if (version == 11U) { // upgrade from gCarvin 1.2.10
+      /// @note settings_t struct is different in version 11 than in 12
+      settings_v11_t settings_v11;
+      if (!(memcpy_from_eeprom_with_checksum((char*)&settings_v11, EEPROM_ADDR_GLOBAL, sizeof(settings_v11_t)))) {
+        return(false);
+      }
+      // copy only used settings and exclude spindle_over_I_max which is now stored in ps_settings
+      memcpy( (char*)&settings, (char*)&settings_v11, sizeof(settings_t) );
+      write_global_settings();
+    }
+    else {
+      return(false);
+    } 
+  }
+  else 
+#endif
   if (version == SETTINGS_VERSION) {
     // Read settings-record and check checksum
     if (!(memcpy_from_eeprom_with_checksum((char*)&settings, EEPROM_ADDR_GLOBAL, sizeof(settings_t)))) {

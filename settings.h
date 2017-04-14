@@ -27,7 +27,7 @@
 
 // Version of the EEPROM data. Will be used to migrate existing data from older versions of Grbl
 // when firmware is upgraded. Always stored in byte 0 of eeprom
-#define SETTINGS_VERSION 10  // NOTE: Check settings_reset() when moving to next version.
+#define SETTINGS_VERSION 12  // NOTE: Check settings_reset() when moving to next version.
 
 // Define bit flag masks for the boolean settings in settings.flag.
 #define BITFLAG_REPORT_INCHES      bit(0)
@@ -103,6 +103,39 @@ typedef struct {
   float homing_pulloff;
 } settings_t;
 extern settings_t settings;
+
+#ifdef CARVIN
+typedef struct {
+  // Axis settings
+  float steps_per_mm[N_AXIS];
+  float max_rate[N_AXIS];
+  float acceleration[N_AXIS];
+  float max_travel[N_AXIS];
+
+  // Remaining Grbl settings
+  uint8_t pulse_microseconds;
+  uint8_t step_invert_mask;
+  uint8_t dir_invert_mask;
+  uint8_t stepper_idle_lock_time; // If max value 255, steppers do not disable.
+  uint8_t status_report_mask; // Mask to indicate desired report data.
+  float junction_deviation;
+  float arc_tolerance;
+  
+  float rpm_max;
+  float rpm_min;
+  
+  uint8_t flags;  // Contains default boolean settings
+
+  uint8_t homing_dir_mask;
+  float homing_feed_rate;
+  float homing_seek_rate;
+  uint16_t homing_debounce_delay;
+  float homing_pulloff;
+  
+  float spindle_over_I_max;  // gCarvin thing
+  
+} settings_v11_t;
+#endif
 
 // Initialize the configuration subsystem (load settings from EEPROM)
 void settings_init();
