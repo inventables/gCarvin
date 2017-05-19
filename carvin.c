@@ -39,7 +39,6 @@ void carvin_init()
   hardware_rev = get_hardware_rev();
   
   spindle_current_init( hardware_rev >= 1U );
-  spindle_current_set_threshold( 1.05 );
   
   tmc26x_init();  // SPI functions to program the chips
 
