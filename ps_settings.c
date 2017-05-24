@@ -20,7 +20,7 @@
 
 const ps_settings_map_element gCarvinParameterMap[] =
 { // {Offset, Size, default value}
-  { 0U, 4U, 1.05f }, // Spindle Current Overload Threshold
+  { 0U, 4U, 1.75f }, // Spindle Current Overload Threshold
 };
 
 static uint8_t* ps_settings_ram_storage = 0U;

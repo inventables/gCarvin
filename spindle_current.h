@@ -11,7 +11,7 @@
 
 // scale 2.56V = 1023 on ADC
 #define SPINDLE_I_COUNT       10    // in the 512Hz interrupt this will get us 51.2Hz current readings
-#define SPINDLE_I_THRESHOLD   1.05  // Current at which system should alarm
+#define SPINDLE_I_THRESHOLD   1.75  // Default current threshold at which system should alarm
 #define SPINDLE_I_SETTING_MAX 3.0
 
 /// Initializes the spindle current measurement subsystem
