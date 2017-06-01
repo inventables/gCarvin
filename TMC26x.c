@@ -2,9 +2,6 @@
 #include "spi.h"
 #include "grbl.h"
 
-void tmc26x_init();
-void setTMC26xRunCurrent(uint8_t);
-
 uint32_t setTMC26xCHOPCONF(uint8_t blankingTime, uint8_t chopModeStd, uint8_t randomTimeOff);
 uint32_t setTMC26xSMARTEN(char minCoolCurrent);
 uint32_t setTMC26xSGSCONF(uint8_t filterEnable, int8_t stallGuardThreshold, uint8_t currentScale);
@@ -74,7 +71,8 @@ uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microst
 #define CS_Z_BIT      2
 #define CS_MASK       ((1<<CS_X_BIT) | (1<<CS_Y_BIT) | (1<<CS_Z_BIT))
 
-#define X_RUN_CURRENT 20
+// for the SPI currents in motors (1 to 32 = 0 to full scale)  check temps after changing!!!
+#define X_RUN_CURRENT 22
 #define Y_RUN_CURRENT 20
 #define Z_RUN_CURRENT 20
 

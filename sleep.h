@@ -1,8 +1,8 @@
 /*
-  eeprom.h - EEPROM methods
+  sleep.h - Sleep methods header file
   Part of Grbl
-
-  Copyright (c) 2009-2011 Simen Svale Skogsrud
+  
+  Copyright (c) 2016 Sungeun K. Jeon  
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -18,15 +18,17 @@
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef eeprom_h
-#define eeprom_h
+#ifndef sleep_h
+#define sleep_h
 
-unsigned char eeprom_get_char(unsigned int addr);
-void eeprom_put_char(unsigned int addr, unsigned char new_value);
-void memcpy_to_eeprom_with_checksum(unsigned int destination, char *source, unsigned int size);
-int memcpy_from_eeprom_with_checksum(char *destination, unsigned int source, unsigned int size);
+#include "grbl.h"
 
-extern void memcpy_to_eeprom_no_checksum(unsigned int destination, const char *source, unsigned int size);
-extern void memcpy_from_eeprom_no_checksum(char *destination, unsigned int source, unsigned int size);
+
+// Initialize sleep timer
+void sleep_init();
+
+// Checks running conditions for sleep. If satisfied, enables sleep countdown and executes
+// sleep mode upon elapse.
+void sleep_check();
 
 #endif

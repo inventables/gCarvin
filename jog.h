@@ -1,8 +1,8 @@
 /*
-  eeprom.h - EEPROM methods
+  jog.h - Jogging methods
   Part of Grbl
 
-  Copyright (c) 2009-2011 Simen Svale Skogsrud
+  Copyright (c) 2016 Sungeun K. Jeon for Gnea Research LLC
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -18,15 +18,15 @@
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef eeprom_h
-#define eeprom_h
+#ifndef jog_h
+#define jog_h
 
-unsigned char eeprom_get_char(unsigned int addr);
-void eeprom_put_char(unsigned int addr, unsigned char new_value);
-void memcpy_to_eeprom_with_checksum(unsigned int destination, char *source, unsigned int size);
-int memcpy_from_eeprom_with_checksum(char *destination, unsigned int source, unsigned int size);
+#include "gcode.h"
 
-extern void memcpy_to_eeprom_no_checksum(unsigned int destination, const char *source, unsigned int size);
-extern void memcpy_from_eeprom_no_checksum(char *destination, unsigned int source, unsigned int size);
+// System motion line numbers must be zero.
+#define JOG_LINE_NUMBER 0
+
+// Sets up valid jog motion received from g-code parser, checks for soft-limits, and executes the jog.
+uint8_t jog_execute(plan_line_data_t *pl_data, parser_block_t *gc_block);
 
 #endif

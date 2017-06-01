@@ -2,9 +2,9 @@
   limits.h - code pertaining to limit-switches and performing the homing cycle
   Part of Grbl
 
-  Copyright (c) 2012-2015 Sungeun K. Jeon  
+  Copyright (c) 2012-2016 Sungeun K. Jeon for Gnea Research LLC
   Copyright (c) 2009-2011 Simen Svale Skogsrud
-  
+
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
@@ -20,7 +20,7 @@
 */
 
 #ifndef limits_h
-#define limits_h 
+#define limits_h
 
 
 // Initialize the limits module
