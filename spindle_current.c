@@ -67,7 +67,7 @@ uint8_t spindle_current_proc( void )
       
       ps_settings_get_setting( 0, (uint8_t*)(&spindle_I_max_amps) );
       
-      if ( spindle_I_max_amps != spindle_I_max_amps )
+      if ( spindle_I_max_amps != previous_spindle_I_max_amps )
       {
         spindle_current_set_threshold( spindle_I_max_amps );
       }
