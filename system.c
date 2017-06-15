@@ -461,10 +461,23 @@ void system_set_exec_alarm(uint8_t code) {
   SREG = sreg;
 }
 
+#ifdef CARVIN
+void system_set_exec_alarm_detailed(uint8_t code, uint8_t detailed_code) {
+  uint8_t sreg = SREG;
+  cli();
+  sys_rt_exec_alarm = code;
+  sys_rt_exec_alarm_details = detailed_code;
+  SREG = sreg;
+}
+#endif
+
 void system_clear_exec_alarm() {
   uint8_t sreg = SREG;
   cli();
   sys_rt_exec_alarm = 0;
+  #ifdef CARVIN
+  sys_rt_exec_alarm_details = 0;
+  #endif
   SREG = sreg;
 }
 

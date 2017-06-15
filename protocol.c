@@ -226,13 +226,28 @@ void protocol_execute_realtime()
 void protocol_exec_rt_system()
 {
   uint8_t rt_exec; // Temp variable to avoid calling volatile multiple times.
+  #ifdef CARVIN
+  uint8_t detailed_alarm = sys_rt_exec_alarm_details;
+  #endif
   rt_exec = sys_rt_exec_alarm; // Copy volatile sys_rt_exec_alarm.
   if (rt_exec) { // Enter only if any bit flag is true
     // System alarm. Everything has shutdown by something that has gone severely wrong. Report
     // the source of the error to the user. If critical, Grbl disables by entering an infinite
     // loop until system reset/abort.
     sys.state = STATE_ALARM; // Set system alarm state
-    report_alarm_message(rt_exec);
+    
+    #ifdef CARVIN
+    if ( detailed_alarm != 0 )
+    {
+      report_alarm_message_detailed(rt_exec, detailed_alarm);
+    }
+    else
+    {
+    #endif
+      report_alarm_message(rt_exec);
+    #ifdef CARVIN
+    }
+    #endif
     // Halt everything upon a critical event flag. Currently hard and soft limits flag this.
     if ((rt_exec == EXEC_ALARM_HARD_LIMIT) || (rt_exec == EXEC_ALARM_SOFT_LIMIT)) {
       report_feedback_message(MESSAGE_CRITICAL_EVENT);

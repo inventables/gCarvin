@@ -151,6 +151,9 @@ int32_t sys_probe_position[N_AXIS]; // Last probe position in machine coordinate
 volatile uint8_t sys_probe_state;   // Probing state value.  Used to coordinate the probing cycle with stepper ISR.
 volatile uint8_t sys_rt_exec_state;   // Global realtime executor bitflag variable for state management. See EXEC bitmasks.
 volatile uint8_t sys_rt_exec_alarm;   // Global realtime executor bitflag variable for setting various alarms.
+#ifdef CARVIN
+volatile uint8_t sys_rt_exec_alarm_details;
+#endif
 volatile uint8_t sys_rt_exec_motion_override; // Global realtime executor bitflag variable for motion-based overrides.
 volatile uint8_t sys_rt_exec_accessory_override; // Global realtime executor bitflag variable for spindle/coolant overrides.
 
@@ -201,6 +204,9 @@ uint8_t system_check_travel_limits(float *target);
 void system_set_exec_state_flag(uint8_t mask);
 void system_clear_exec_state_flag(uint8_t mask);
 void system_set_exec_alarm(uint8_t code);
+#ifdef CARVIN
+void system_set_exec_alarm_detailed(uint8_t code, uint8_t detailed_code);
+#endif
 void system_clear_exec_alarm();
 void system_set_exec_motion_override_flag(uint8_t mask);
 void system_set_exec_accessory_override_flag(uint8_t mask);

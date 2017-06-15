@@ -130,6 +130,22 @@ void report_alarm_message(uint8_t alarm_code)
   delay_ms(500); // Force delay to ensure message clears serial write buffer.
 }
 
+#ifdef CARVIN
+// Prints alarm messages that have extra details.
+void report_alarm_message_detailed(uint8_t alarm_code, uint8_t detailed_code)
+{
+  printPgmString(PSTR("ALARM:"));
+  print_uint8_base10(alarm_code);
+  if(detailed_code)
+  {
+    printPgmString(PSTR("."));
+    print_uint8_base10(detailed_code);
+  }
+  report_util_line_feed();
+  delay_ms(500); // Force delay to ensure message clears serial write buffer.
+}
+#endif
+
 // Prints feedback messages. This serves as a centralized method to provide additional
 // user feedback for things that are not of the status/alarm message protocol. These are
 // messages such as setup warnings, switch toggling, and how to exit alarms.

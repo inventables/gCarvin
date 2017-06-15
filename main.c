@@ -75,6 +75,9 @@ int main(void)
     sys_probe_state = 0;
     sys_rt_exec_state = 0;
     sys_rt_exec_alarm = 0;
+    #ifdef CARVIN
+    sys_rt_exec_alarm_details = 0;
+    #endif
     sys_rt_exec_motion_override = 0;
     sys_rt_exec_accessory_override = 0;
 

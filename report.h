@@ -89,6 +89,11 @@ void report_status_message(uint8_t status_code);
 // Prints system alarm messages.
 void report_alarm_message(uint8_t alarm_code);
 
+#ifdef CARVIN
+// Prints system alarm messages that have extra details.
+void report_alarm_message_detailed(uint8_t alarm_code, uint8_t detailed_code);
+#endif
+
 // Prints miscellaneous feedback messages.
 void report_feedback_message(uint8_t message_code);
 
