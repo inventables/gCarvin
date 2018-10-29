@@ -161,6 +161,7 @@ ISR(SERIAL_RX)
       #endif
     }
     case CMD_RESET_CPU:     reset_cpu(); break; // hard reset the CPU
+    case CMD_MOTOR_STATUS: {uint8_t sreg = SREG; cli(); bit_true(sys_rt_exec_status, bit(0)); SREG = sreg;} break;
     #endif
     default :
       if (data > 0x7F) { // Real-time control characters are extended ACSII only.

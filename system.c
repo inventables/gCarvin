@@ -265,11 +265,11 @@ uint8_t system_execute_line(char *line)
           #endif
           }
           break;
-		#ifdef CARVIN
-		case 'K':
+		    #ifdef CARVIN
+		    case 'K':
           reset_cpu();  // hard reset
-		break;
-		case 'L':
+		      break;
+		    case 'L':
           if(line[++char_counter] == '1')
           {
             throb_pwm(&button_led, BUTTON_LED_THROB_MIN, BUTTON_LED_THROB_RATE);
@@ -283,13 +283,24 @@ uint8_t system_execute_line(char *line)
             set_pwm(&door_led, 0,DOOR_LED_RISE_TIME);
             set_pwm(&spindle_led, 0,SPINDLE_LED_RISE_TIME);
           }
-        break;
+          break;
+        case 'M':
+          {
+            printPgmString(PSTR("sg2=[ "));
+            printInteger( getTMC26xStallGuard2Value(0) );
+            printPgmString(PSTR(", "));
+            printInteger( getTMC26xStallGuard2Value(1) );
+            printPgmString(PSTR(", "));
+            printInteger( getTMC26xStallGuard2Value(2) );
+            printPgmString(PSTR(" ]\r\n"));
+          }
+          break;
         case 'D':
           use_sleep_feature = (! use_sleep_feature);			
           printPgmString(PSTR(" Sleep Feature "));
           print_uint8_base10(use_sleep_feature);
           printPgmString(PSTR(" ]\r\n"));			
-        break;
+          break;
         #endif
         case 'R' : // Restore defaults [IDLE/ALARM]
           if ((line[2] != 'S') || (line[3] != 'T') || (line[4] != '=') || (line[6] != 0)) { return(STATUS_INVALID_STATEMENT); }

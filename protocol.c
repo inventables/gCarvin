@@ -526,6 +526,20 @@ void protocol_exec_rt_system()
   if (sys.state & (STATE_CYCLE | STATE_HOLD | STATE_SAFETY_DOOR | STATE_HOMING | STATE_SLEEP| STATE_JOG)) {
     st_prep_buffer();
   }
+  
+  #ifdef CARVIN
+  if (sys_rt_exec_status & bit(0))
+  {
+    printPgmString(PSTR("[sg="));
+    printInteger( getTMC26xStallGuard2Value(0) );
+    printPgmString(PSTR(", "));
+    printInteger( getTMC26xStallGuard2Value(1) );
+    printPgmString(PSTR(", "));
+    printInteger( getTMC26xStallGuard2Value(2) );
+    printPgmString(PSTR("]\r\n"));
+    sys_rt_exec_status = 0;
+  }
+  #endif
 
 }
 

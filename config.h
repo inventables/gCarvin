@@ -53,6 +53,7 @@
 #define CMD_FEED_HOLD '!'
 #define CMD_LEGACY_SAFETY_DOOR '@'
 #define CMD_RESET_CPU 0x19
+#define CMD_MOTOR_STATUS '`'
 
 // NOTE: All override realtime commands must be in the extended ASCII character set, starting
 // at character value 128 (0x80) and up to 255 (0xFF). If the normal set of realtime commands,

@@ -8,6 +8,8 @@ uint32_t setTMC26xSGSCONF(uint8_t filterEnable, int8_t stallGuardThreshold, uint
 uint32_t setTMC26xDRVCONF(uint8_t readItem);
 uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microstepMode);
 
+static uint8_t runIdleLevel;
+
 #define DRIVER_CONTROL_REGISTER 0x0ul
 #define STEP_INTERPOLATION 0x200ul
 #define DOUBLE_EDGE_STEP 0x100ul
@@ -89,7 +91,7 @@ uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microst
 #define CARVEY_STALL_GAURD_THRESHOLD 10 
 
 
-void tmc26x_init()
+void tmc26x_init(void)
 {
   uint8_t csBit;
   
@@ -130,38 +132,42 @@ void tmc26x_init()
   spi_send20bit( setTMC26xDRVCONF(READOUT_VALUE_SG2), &CS_PORT, csBit);
   spi_send20bit( setTMC26xDRVCTRL(STEP_ITERPOL_DISABLE,DOUBLE_EDGE_DISABLE,Z_MICROSTEPS), &CS_PORT, csBit);
   
+  
+  runIdleLevel = 0; // Idle
 }
 
 
 void setTMC26xRunCurrent(uint8_t level)  // 1 = run, 0 = idle
 {
-	if (level == 1)
-	{	
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_RUN_CURRENT), &CS_PORT, CS_X_BIT);
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_RUN_CURRENT), &CS_PORT, CS_Y_BIT);
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_RUN_CURRENT), &CS_PORT, CS_Z_BIT);
-	}
-	else 
-	{
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_IDLE_CURRENT), &CS_PORT, CS_X_BIT);
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_IDLE_CURRENT), &CS_PORT, CS_Y_BIT);
-		spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_IDLE_CURRENT), &CS_PORT, CS_Z_BIT);
-	}
+  if (level != runIdleLevel)
+  {
+    if (level == 1)
+    {	
+      runIdleLevel = 1;
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_RUN_CURRENT), &CS_PORT, CS_X_BIT);
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_RUN_CURRENT), &CS_PORT, CS_Y_BIT);
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_RUN_CURRENT), &CS_PORT, CS_Z_BIT);
+    }
+    else 
+    {
+      runIdleLevel = 0;
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, X_IDLE_CURRENT), &CS_PORT, CS_X_BIT);
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Y_IDLE_CURRENT), &CS_PORT, CS_Y_BIT);
+      spi_send20bit(setTMC26xSGSCONF(SG2_FILTER_ENABLE, CARVEY_STALL_GAURD_THRESHOLD, Z_IDLE_CURRENT), &CS_PORT, CS_Z_BIT);
+    }
+  }
 }
 
 
-unsigned long readValue(uint8_t readItem)
- {
-    return  spi_send20bit( setTMC26xDRVCONF(readItem), &CS_PORT, CS_X_BIT);
- }
- 
- unsigned long readStallGuard()
- {
-   //unsigned long sgVal;
-   
-   return (( spi_send20bit( setTMC26xDRVCONF(READOUT_VALUE_SG2), &CS_PORT, CS_X_BIT) & 0x7FC00) >> 10);
- }
+unsigned long readValue(uint8_t readItem, uint8_t cs_bit)
+{
+  return spi_send20bit( setTMC26xDRVCONF(readItem), &CS_PORT, cs_bit);
+}
 
+uint16_t getTMC26xStallGuard2Value(uint8_t cs_bit)
+{
+  return (uint16_t)((readValue(READOUT_VALUE_SG2, cs_bit) & 0xFFC00) >> 10);
+}
 
 /*
   ================================= CHOPCONF =============================
@@ -350,9 +356,6 @@ uint32_t setTMC26xSGSCONF(uint8_t filterEnable, int8_t stallGuardThreshold, uint
   
 }
 
-
-
-
 /* 
   ============================================ DRVCTRL ========================================
   set drvctrl register (when SDOFF=0)
@@ -410,10 +413,3 @@ uint32_t setTMC26xDRVCTRL(uint8_t interpol, uint8_t doubleEdge, uint16_t microst
      
    return regVal;
 }
-
-unsigned long tmc26xStallGuardReading()
-{
-  
-}
-
-

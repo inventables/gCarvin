@@ -153,6 +153,7 @@ volatile uint8_t sys_rt_exec_state;   // Global realtime executor bitflag variab
 volatile uint8_t sys_rt_exec_alarm;   // Global realtime executor bitflag variable for setting various alarms.
 #ifdef CARVIN
 volatile uint8_t sys_rt_exec_alarm_details;
+volatile uint8_t sys_rt_exec_status;
 #endif
 volatile uint8_t sys_rt_exec_motion_override; // Global realtime executor bitflag variable for motion-based overrides.
 volatile uint8_t sys_rt_exec_accessory_override; // Global realtime executor bitflag variable for spindle/coolant overrides.
